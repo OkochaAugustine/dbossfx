@@ -1,66 +1,71 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+"use client";
 
-export default function Home() {
+import Hero from "@/components/Hero";
+import MarketsSection from "@/components/MarketsSection";
+import BrokerEdgeSection from "@/components/BrokerEdgeSection";
+import WhyChooseDbossFX from "@/components/WhyChooseDbossFX";
+import TradingPlatformsSection from "@/components/TradingPlatformsSection";
+import AccountTypesSection from "@/components/AccountTypesSection";
+import SecuritySection from "@/components/SecuritySection";
+import TrustedSection from "@/components/TrustedSection";
+
+import { Box, Heading, Text, Stack, SimpleGrid, Button } from "@chakra-ui/react";
+import Link from "next/link";
+
+export default function HomePage() {
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.js file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <>
+      <Hero />
+
+      <MarketsSection />
+      <BrokerEdgeSection />
+      <WhyChooseDbossFX />
+      <TradingPlatformsSection />
+      <AccountTypesSection />
+      <SecuritySection />
+      <TrustedSection />
+
+      {/* FEATURES / TRUST SECTION */}
+      <Box py={20} px={6} bg="gray.50">
+        <Heading textAlign="center" mb={12}>
+          Why Traders Choose DbossFX
+        </Heading>
+
+        <SimpleGrid
+          columns={{ base: 1, md: 2, lg: 4 }}
+          spacing={8}
+          maxW="1200px"
+          mx="auto"
+        >
+          {[
+            { title: "Ultra-Low Spreads", desc: "Trade major FX pairs with institutional-grade pricing." },
+            { title: "Lightning Execution", desc: "Orders executed in milliseconds with zero requotes." },
+            { title: "Secure Funds", desc: "Advanced security and segregated client accounts." },
+            { title: "24/7 Support", desc: "Professional support team always ready to assist." },
+          ].map((item, i) => (
+            <Box key={i} bg="white" p={8} rounded="2xl" shadow="lg">
+              <Heading fontSize="xl" mb={3}>{item.title}</Heading>
+              <Text color="gray.600">{item.desc}</Text>
+            </Box>
+          ))}
+        </SimpleGrid>
+      </Box>
+
+      {/* CALL TO ACTION */}
+      <Box bg="black" color="white" py={20} textAlign="center">
+        <Stack spacing={6}>
+          <Heading>Start Trading with Confidence</Heading>
+          <Text color="gray.400">
+            Join thousands of traders who trust DbossFX every day.
+          </Text>
+
+          <Link href="/register">
+            <Button size="lg" colorScheme="yellow" mx="auto">
+              Create Account Now
+            </Button>
+          </Link>
+        </Stack>
+      </Box>
+    </>
   );
 }
