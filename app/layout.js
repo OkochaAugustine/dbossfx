@@ -2,23 +2,36 @@ import "./globals.css";
 import Providers from "./providers";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-
-export const metadata = {
-  title: "DbossFX | Trade Smart. Trade Global.",
-  description: "Professional Forex Broker Platform",
-};
+import { LoadingProvider } from "@/components/context/LoadingContext";
+import LoaderGate from "@/components/LoaderGate";
+import RouteListener from "@/components/RouteListener";
+import LayoutShell from "@/components/LayoutClient";
+import GlobalChat from "@/components/GlobalChat"; // ✅ imported
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body>
-        {/* Providers MUST wrap everything that uses Chakra */}
-        <Providers>
-          <Navbar />
-          {children}
-          <Footer />
-        </Providers>
+      <body
+        style={{
+          margin: 0,
+          padding: 0,
+          overflowX: "hidden",
+          width: "100vw",
+          minWidth: 0,
+        }}
+      >
+        <LoadingProvider>
+          <Providers>
+            <RouteListener />
+            <LoaderGate />
+            <LayoutShell>
+              {children}
+              <GlobalChat /> {/* ✅ chat appears globally */}
+            </LayoutShell>
+          </Providers>
+        </LoadingProvider>
       </body>
     </html>
   );
 }
+

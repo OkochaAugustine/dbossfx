@@ -3,7 +3,6 @@
 import {
   Box,
   Flex,
-  Button,
   Text,
   HStack,
   IconButton,
@@ -11,152 +10,212 @@ import {
   Stack,
   Collapse,
   Link as ChakraLink,
+  Button,
 } from "@chakra-ui/react";
 import { HamburgerIcon, CloseIcon } from "@chakra-ui/icons";
 import Image from "next/image";
-import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useLoading } from "@/components/context/LoadingContext";
+
+/* FALLBACK ASSETS & NEWS */
+const FALLBACK_ASSETS = [
+  { symbol: "EURUSD", price: "1.0842", up: true },
+  { symbol: "GBPUSD", price: "1.2631", up: false },
+  { symbol: "USDJPY", price: "157.42", up: true },
+  { symbol: "AUDUSD", price: "0.6521", up: true },
+  { symbol: "USDCAD", price: "1.3724", up: false },
+  { symbol: "BTC", price: "43210", up: true },
+  { symbol: "ETH", price: "2280", up: false },
+  { symbol: "AAPL", price: "195.30", up: true },
+  { symbol: "TSLA", price: "248.12", up: false },
+];
+
+const FALLBACK_NEWS = [
+  "ECB Keeps Rates Steady Amid Inflation Concerns",
+  "Bitcoin Surges Past $35k Following ETF Approval",
+  "US Non-Farm Payroll Exceeds Expectations",
+  "Gold Prices Hit 6-Month High",
+  "Tesla Announces New Model Release",
+];
 
 export default function Navbar() {
   const { isOpen, onToggle } = useDisclosure();
+  const router = useRouter();
+  const { setLoading, setType } = useLoading();
 
-  const [pairs, setPairs] = useState([
-    "EUR/USD 1.1023 ▲0.12%",
-    "USD/JPY 144.21 ▼0.05%",
-    "GBP/USD 1.2589 ▲0.07%",
-    "AUD/USD 0.6854 ▼0.03%",
-    "USD/CHF 0.9145 ▲0.02%",
-    "NZD/USD 0.6321 ▲0.10%",
-  ]);
+  const [assets, setAssets] = useState(FALLBACK_ASSETS);
+  const [news, setNews] = useState(FALLBACK_NEWS);
 
-  // Rotate currency pairs for live feel
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPairs((prev) => [...prev.slice(1), prev[0]]);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+  const go = (path) => {
+    setType("public");
+    setLoading(true);
+    setTimeout(() => {
+      router.replace(path);
+    }, 50);
+  };
 
   const NavLink = ({ href, children }) => (
-    <Link href={href ?? "#"} passHref legacyBehavior>
-      <ChakraLink
-        px={3}
-        py={2}
-        rounded="md"
-        _hover={{ textDecoration: "none", bg: "gray.100" }}
-        color="black"
-      >
-        {children}
-      </ChakraLink>
-    </Link>
+    <ChakraLink
+      px={3}
+      py={2}
+      rounded="md"
+      cursor="pointer"
+      color="white"
+      _hover={{ bg: "rgba(255,255,255,0.15)", textDecoration: "none" }}
+      onClick={() => {
+        if (isOpen) onToggle();
+        go(href);
+      }}
+    >
+      {children}
+    </ChakraLink>
   );
 
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchMarket = async () => {
+      try {
+        const res = await fetch("/api/market", { cache: "no-store" });
+        const data = await res.json();
+        if (mounted && Array.isArray(data) && data.length > 0) setAssets(data);
+      } catch (err) {
+        console.error("Market API error:", err);
+      }
+    };
+
+    fetchMarket();
+    const interval = setInterval(fetchMarket, 3000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const assetsDuration = useMemo(() => `${Math.max(20, assets.length * 2)}s`, [assets.length]);
+  const newsDuration = useMemo(() => `${Math.max(20, news.length * 2)}s`, [news.length]);
+
   return (
-    <Box position="sticky" top="0" zIndex="1000" bg="white" boxShadow="md">
-      {/* Top Row: Logo, Links, CTA */}
-      <Flex
-        h={20}
-        alignItems="center"
-        justifyContent="space-between"
-        maxW="7xl"
-        mx="auto"
-        px={4}
-      >
-        {/* Logo */}
-        <Box display="flex" alignItems="center">
-          <Image src="/images/logo.png" alt="DbossFX Logo" width={80} height={80} />
-          <Text ml={3} fontSize="3xl" fontWeight="bold" color="black">
-            DbossFX
-          </Text>
-        </Box>
+    <Box position="sticky" top="0" zIndex="1000">
+      <Box bg="gray.900" boxShadow="md">
+        <Flex
+          h={20}
+          maxW="7xl"
+          mx="auto"
+          px={4}
+          align="center"
+          justify="space-between"
+        >
+          <Box cursor="pointer" onClick={() => go("/")}>
+            <Image src="/images/logo.png" alt="Logo" width={100} height={40} />
+          </Box>
 
-        {/* Desktop Links */}
-        <HStack spacing={6} display={{ base: "none", md: "flex" }}>
-          <NavLink href="/">Home</NavLink>
-          <NavLink href="/markets">Markets</NavLink>
-          <NavLink href="/platforms">Platforms</NavLink>
-          <NavLink href="/about">About</NavLink>
-          <NavLink href="/contact">Contact</NavLink>
-        </HStack>
-
-        {/* CTA Buttons */}
-        <HStack spacing={4} display={{ base: "none", md: "flex" }}>
-          <NavLink href="/login">
-            <Button variant="outline" colorScheme="yellow">
-              Login
-            </Button>
-          </NavLink>
-          <NavLink href="/register">
-            <Button colorScheme="yellow">Open Account</Button>
-          </NavLink>
-        </HStack>
-
-        {/* Mobile Hamburger */}
-        <IconButton
-          size="md"
-          icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
-          aria-label="Open Menu"
-          display={{ md: "none" }}
-          onClick={onToggle}
-          color="black"
-          bg="transparent"
-          _hover={{ bg: "gray.100" }}
-        />
-      </Flex>
-
-      {/* Bottom Row: Live Currency Pairs */}
-      <Box bg="gray.50" py={2} px={4} overflow="hidden">
-        {/* Desktop Grid */}
-        <Flex display={{ base: "none", md: "flex" }} gap={4}>
-          {pairs.map((pair, i) => (
-            <Text
-              key={i}
-              fontSize="sm"
-              fontWeight="bold"
-              color={pair.includes("▲") ? "green.500" : "red.500"}
-            >
-              {pair}
-            </Text>
-          ))}
-        </Flex>
-
-        {/* Mobile Horizontal Scroll */}
-        <Flex display={{ base: "flex", md: "none" }} overflowX="auto" gap={4}>
-          {pairs.map((pair, i) => (
-            <Text
-              key={i}
-              flex="0 0 auto"
-              fontSize="sm"
-              fontWeight="bold"
-              color={pair.includes("▲") ? "green.500" : "red.500"}
-              px={3}
-              py={1}
-              bg="gray.100"
-              rounded="md"
-            >
-              {pair}
-            </Text>
-          ))}
-        </Flex>
-      </Box>
-
-      {/* Mobile Menu */}
-      <Collapse in={isOpen} animateOpacity>
-        <Box pb={4} display={{ md: "none" }} bg="white">
-          <Stack as="nav" spacing={4}>
+          {/* Desktop Links */}
+          <HStack spacing={6} display={{ base: "none", md: "flex" }}>
             <NavLink href="/">Home</NavLink>
             <NavLink href="/markets">Markets</NavLink>
             <NavLink href="/platforms">Platforms</NavLink>
             <NavLink href="/about">About</NavLink>
             <NavLink href="/contact">Contact</NavLink>
-            <NavLink href="/register">
-              <Button colorScheme="yellow" w="full">
-                Open Account
-              </Button>
-            </NavLink>
+            <Button
+              colorScheme="yellow"
+              onClick={() => go("/login")}
+              size="sm"
+            >
+              Login
+            </Button>
+          </HStack>
+
+          {/* Mobile menu toggle */}
+          <IconButton
+            icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
+            display={{ md: "none" }}
+            onClick={onToggle}
+            bg="transparent"
+            color="white"
+            aria-label="Toggle Menu"
+          />
+        </Flex>
+
+        {/* Assets ticker */}
+        <Box bg="gray.900" overflow="hidden" py={2}>
+          <Flex w="max-content" animation={`ticker ${assetsDuration} linear infinite`}>
+            <Flex gap={10} whiteSpace="nowrap">
+              {assets.map((a, i) => (
+                <Text
+                  key={`a-${i}`}
+                  fontSize="sm"
+                  fontWeight="bold"
+                  color={a.up ? "green.300" : "red.300"}
+                >
+                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
+                </Text>
+              ))}
+            </Flex>
+            <Flex gap={10} whiteSpace="nowrap">
+              {assets.map((a, i) => (
+                <Text
+                  key={`b-${i}`}
+                  fontSize="sm"
+                  fontWeight="bold"
+                  color={a.up ? "green.300" : "red.300"}
+                >
+                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
+                </Text>
+              ))}
+            </Flex>
+          </Flex>
+        </Box>
+
+        {/* News ticker */}
+        <Box bg="gray.800" overflow="hidden" py={2}>
+          <Flex w="max-content" animation={`ticker ${newsDuration} linear infinite`}>
+            <Flex gap={10} whiteSpace="nowrap">
+              {news.map((n, i) => (
+                <Text key={`n-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
+                  📰 {n}
+                </Text>
+              ))}
+            </Flex>
+            <Flex gap={10} whiteSpace="nowrap">
+              {news.map((n, i) => (
+                <Text key={`m-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
+                  📰 {n}
+                </Text>
+              ))}
+            </Flex>
+          </Flex>
+        </Box>
+      </Box>
+
+      {/* Mobile menu */}
+      <Collapse in={isOpen} animateOpacity>
+        <Box bg="gray.900" pb={4} display={{ md: "none" }}>
+          <Stack px={4} spacing={3}>
+            <NavLink href="/">Home</NavLink>
+            <NavLink href="/markets">Markets</NavLink>
+            <NavLink href="/platforms">Platforms</NavLink>
+            <NavLink href="/about">About</NavLink>
+            <NavLink href="/contact">Contact</NavLink>
+            <Button
+              colorScheme="yellow"
+              onClick={() => go("/login")}
+              w="full"
+            >
+              Login
+            </Button>
           </Stack>
         </Box>
       </Collapse>
+
+      <style jsx global>{`
+        @keyframes ticker {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+      `}</style>
     </Box>
   );
 }

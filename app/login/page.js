@@ -2,23 +2,11 @@
 
 import { useState } from "react";
 import {
-  Box,
-  Stack,
-  Heading,
-  Text,
-  Input,
-  Button,
-  VStack,
-  FormControl,
-  FormLabel,
-  InputGroup,
-  InputRightElement,
-  Checkbox,
-  useToast,
-  Spinner,
-  Center,
+  Box, Stack, Heading, Text, Input, Button, VStack, FormControl, FormLabel,
+  InputGroup, InputRightElement, useToast, Spinner, Center
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,7 +20,7 @@ export default function LoginPage() {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!form.email || !form.password) {
@@ -40,21 +28,29 @@ export default function LoginPage() {
       return;
     }
 
-    const users = JSON.parse(localStorage.getItem("users") || "[]");
-    const user = users.find((u) => u.email === form.email && u.password === form.password);
+    try {
+      setLoading(true);
 
-    if (!user) {
-      toast({ title: "Invalid email or password", status: "error", duration: 3000 });
-      return;
-    }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: form.email,
+        password: form.password,
+      });
 
-    // Show loading screen before redirecting
-    setLoading(true);
-    setTimeout(() => {
+      if (error) throw error;
+
+      toast({ title: `Welcome back, ${data.user.email}!`, status: "success", duration: 3000 });
+      router.push("/dashboard"); // redirect to dashboard
+
+    } catch (err) {
+      toast({
+        title: "Login failed",
+        description: err.message || err.error_description,
+        status: "error",
+        duration: 4000,
+      });
+    } finally {
       setLoading(false);
-      toast({ title: `Welcome back, ${user.fullName}!`, status: "success", duration: 3000 });
-      router.push("/dashboard"); // Replace with your actual dashboard route
-    }, 2000);
+    }
   };
 
   if (loading) {
@@ -62,9 +58,7 @@ export default function LoginPage() {
       <Center bg="gray.50" minH="100vh">
         <VStack spacing={4}>
           <Spinner size="xl" color="yellow.400" />
-          <Text fontSize="lg" fontWeight="bold">
-            Logging in...
-          </Text>
+          <Text fontSize="lg" fontWeight="bold">Logging in...</Text>
         </VStack>
       </Center>
     );
@@ -74,9 +68,8 @@ export default function LoginPage() {
     <Box bg="gray.50" minH="100vh" py={16}>
       <Stack maxW="500px" mx="auto" spacing={8} bg="white" p={10} rounded="2xl" shadow="xl">
         <Heading textAlign="center">Login to Your Account</Heading>
-        <Text textAlign="center" color="gray.600">
-          Welcome back! Please enter your credentials to continue.
-        </Text>
+        <Text textAlign="center" color="gray.600">Welcome back! Please enter your credentials to continue.</Text>
+
         <form onSubmit={handleSubmit}>
           <VStack spacing={4}>
             <FormControl isRequired>
@@ -108,17 +101,15 @@ export default function LoginPage() {
               </InputGroup>
             </FormControl>
 
-            <Checkbox alignSelf="start" colorScheme="yellow">
-              Remember Me
-            </Checkbox>
+            <Button colorScheme="yellow" w="full" type="submit">Login</Button>
 
-            <Button colorScheme="yellow" w="full" type="submit">
-              Login
-            </Button>
-
-            <Text fontSize="sm" color="gray.600">
-              Don’t have an account?{" "}
-              <Button variant="link" colorScheme="yellow" onClick={() => router.push("/open-account")}>
+            <Text textAlign="center" color="gray.500">
+              Don't have an account?{" "}
+              <Button
+                variant="link"
+                colorScheme="blue"
+                onClick={() => router.push("/register")}
+              >
                 Register
               </Button>
             </Text>
