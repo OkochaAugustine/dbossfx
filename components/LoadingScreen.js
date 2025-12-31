@@ -1,7 +1,8 @@
 // app/components/LoadingScreen.js
 "use client";
 
-import { Box, VStack, Text, keyframes } from "@chakra-ui/react";
+import { Box, VStack, Text } from "@chakra-ui/react";
+import { keyframes } from "@emotion/react"; // ✅ Correct import
 
 export default function LoadingScreen({ type = "dashboard" }) {
   const spin = keyframes`
