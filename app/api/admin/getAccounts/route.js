@@ -1,69 +1,52 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY // Service role key required for admin-level access
-);
+// app/api/admin/getAccounts/route.js
+import { supabase } from "@/lib/supabaseClient";
+import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
-    // 1️⃣ Fetch all users
+    /**
+     * 1. Fetch users from public.users (NOT auth.users)
+     */
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select("*")
-      .order("full_name", { ascending: true });
+      .select("id, email, full_name, phone")
+      .order("created_at", { ascending: false });
 
     if (usersError) throw usersError;
 
-    // 2️⃣ Fetch all account statements
+    /**
+     * 2. Fetch all account statements
+     */
     const { data: accounts, error: accountsError } = await supabase
       .from("account_statements")
-      .select("*");
+      .select("id, user_id, balance, earned_profit, active_deposit");
 
     if (accountsError) throw accountsError;
 
-    // 3️⃣ Merge users with their account statements
-    const merged = await Promise.all(
-      users.map(async (u) => {
-        let acc = accounts.find(a => a.user_id === u.id);
+    /**
+     * 3. Merge users + accounts
+     * (account_id is guaranteed to exist now)
+     */
+    const merged = users.map((user) => {
+      const acc = accounts.find((a) => a.user_id === user.id);
 
-        // 4️⃣ If no account exists, create it immediately
-        if (!acc) {
-          const { data: newAcc, error: createError } = await supabase
-            .from("account_statements")
-            .insert({
-              user_id: u.id,
-              balance: 0,
-              earned_profit: 0,
-              active_deposit: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            })
-            .select()
-            .single();
+      return {
+        account_id: acc.id,
+        user_id: user.id,
+        full_name: user.full_name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        balance: acc.balance,
+        earned_profit: acc.earned_profit,
+        active_deposit: acc.active_deposit,
+      };
+    });
 
-          if (createError) console.error("❌ Error creating account for user:", u.id, createError.message);
-          acc = newAcc;
-        }
-
-        return {
-          account_id: acc?.id,
-          user_id: u.id,
-          full_name: u.full_name,
-          email: u.email,
-          phone: u.phone,
-          balance: acc.balance,
-          earned_profit: acc.earned_profit,
-          active_deposit: acc.active_deposit,
-          equity: (acc.balance || 0) + (acc.earned_profit || 0) // 💹 include equity for admin display
-        };
-      })
+    return NextResponse.json({ success: true, data: merged });
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error.message },
+      { status: 500 }
     );
-
-    // 5️⃣ Return merged data
-    return new Response(JSON.stringify(merged), { status: 200 });
-  } catch (err) {
-    console.error("❌ Error fetching accounts:", err);
-    return new Response(JSON.stringify({ error: err.message }), { status: 500 });
   }
 }

@@ -14,53 +14,48 @@ import {
   Button,
   Spinner,
   Center,
-  VStack,
-  Text,
   Divider,
+  VStack,
   HStack,
+  Text,
   useToast,
 } from "@chakra-ui/react";
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminDashboard() {
+  const toast = useToast();
+
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+
   const [messages, setMessages] = useState([]);
   const [replyInputs, setReplyInputs] = useState({});
-  const toast = useToast();
 
-  // ------------------- Fetch accounts -------------------
+  // ------------------- Fetch users + accounts -------------------
   const fetchAccounts = async () => {
-    setLoading(true);
     try {
+      setLoading(true);
+
       const res = await fetch("/api/admin/getAccounts");
-      const data = await res.json();
+      const result = await res.json();
 
-      if (!res.ok) throw new Error(data.error || "Failed to fetch accounts");
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to fetch users");
+      }
 
-      const normalized = data.map((item) => ({
-        account_id: item.account_id,
-        user_id: item.user_id,
-        full_name: item.full_name ?? "",
-        email: item.email ?? "",
-        phone: item.phone ?? "",
-        balance:
-          accounts.find((a) => a.account_id === item.account_id)?.balance ??
-          item.balance ??
-          0,
-        earned_profit:
-          accounts.find((a) => a.account_id === item.account_id)
-            ?.earned_profit ?? item.earned_profit ?? 0,
-        active_deposit:
-          accounts.find((a) => a.account_id === item.account_id)
-            ?.active_deposit ?? item.active_deposit ?? 0,
+      // ✅ FIX: result.data is the array (not result itself)
+      const sanitized = result.data.map((acc) => ({
+        ...acc,
+        balance: acc.balance ?? 0,
+        earned_profit: acc.earned_profit ?? 0,
+        active_deposit: acc.active_deposit ?? 0,
       }));
 
-      setAccounts(normalized);
+      setAccounts(sanitized);
     } catch (err) {
       toast({
-        title: "Error fetching accounts",
+        title: "Error fetching users",
         description: err.message,
         status: "error",
         duration: 5000,
@@ -74,18 +69,18 @@ export default function AdminDashboard() {
     fetchAccounts();
   }, []);
 
-  const handleChange = (accountId, field, value) => {
+  // ------------------- Handle input change -------------------
+  const handleChange = (userId, field, value) => {
     setAccounts((prev) =>
       prev.map((acc) =>
-        acc.account_id === accountId ? { ...acc, [field]: value } : acc
+        acc.user_id === userId ? { ...acc, [field]: value } : acc
       )
     );
   };
 
+  // ------------------- Save account -------------------
   const handleSave = async (account) => {
-    if (!account.account_id) return;
-
-    setSavingId(account.account_id);
+    setSavingId(account.user_id);
 
     try {
       const payload = {
@@ -102,31 +97,18 @@ export default function AdminDashboard() {
       });
 
       const result = await res.json();
-
-      if (!res.ok || !result.success)
-        throw new Error(result.error || "Failed to save account");
+      if (!res.ok || !result.success) {
+        throw new Error(result.error || "Failed to update account");
+      }
 
       toast({
-        title: "Account updated successfully",
+        title: "Account updated",
         status: "success",
-        duration: 3000,
+        duration: 2000,
       });
-
-      setAccounts((prev) =>
-        prev.map((acc) =>
-          acc.account_id === account.account_id
-            ? {
-                ...acc,
-                balance: payload.balance,
-                earned_profit: payload.earned_profit,
-                active_deposit: payload.active_deposit,
-              }
-            : acc
-        )
-      );
     } catch (err) {
       toast({
-        title: "Error saving account",
+        title: "Error",
         description: err.message,
         status: "error",
         duration: 4000,
@@ -136,35 +118,37 @@ export default function AdminDashboard() {
     }
   };
 
-  // ------------------- Fetch support messages -------------------
+  // ------------------- Support messages -------------------
   useEffect(() => {
-    const fetchMessages = async () => {
+    let mounted = true;
+
+    const loadMessages = async () => {
       const { data } = await supabase
         .from("support_messages")
         .select("*")
         .order("created_at", { ascending: true });
-      setMessages(data || []);
+
+      if (mounted) setMessages(data || []);
     };
-    fetchMessages();
+
+    loadMessages();
 
     const channel = supabase
-      .channel("support-chat-admin")
+      .channel("support-admin")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "support_messages" },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          if (mounted) setMessages((prev) => [...prev, payload.new]);
         }
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
   }, []);
-
-  // ------------------- Admin reply -------------------
-  const handleReplyChange = (userId, value) => {
-    setReplyInputs((prev) => ({ ...prev, [userId]: value }));
-  };
 
   const sendReply = async (userId) => {
     const message = replyInputs[userId]?.trim();
@@ -176,6 +160,7 @@ export default function AdminDashboard() {
         sender: "admin",
         message,
       });
+
       setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
     } catch (err) {
       toast({
@@ -195,33 +180,31 @@ export default function AdminDashboard() {
     );
   }
 
-  // Group messages by user_id
   const groupedMessages = messages.reduce((acc, msg) => {
-    if (!acc[msg.user_id]) acc[msg.user_id] = [];
+    acc[msg.user_id] = acc[msg.user_id] || [];
     acc[msg.user_id].push(msg);
     return acc;
   }, {});
 
   return (
     <Box p={8}>
-      <Heading mb={6}>Admin Dashboard - Account Statements</Heading>
+      <Heading mb={6}>Admin Dashboard – Registered Users</Heading>
 
-      {/* ================= Account Table ================= */}
-      <Table variant="simple" size="sm" mb={12}>
+      <Table size="sm" mb={12}>
         <Thead>
           <Tr>
-            <Th>Full Name</Th>
+            <Th>Name</Th>
             <Th>Email</Th>
             <Th>Phone</Th>
             <Th>Balance</Th>
-            <Th>Earned Profit</Th>
-            <Th>Active Deposit</Th>
+            <Th>Profit</Th>
+            <Th>Deposit</Th>
             <Th>Action</Th>
           </Tr>
         </Thead>
         <Tbody>
           {accounts.map((acc) => (
-            <Tr key={acc.account_id}>
+            <Tr key={acc.user_id}>
               <Td>{acc.full_name}</Td>
               <Td>{acc.email}</Td>
               <Td>{acc.phone}</Td>
@@ -231,7 +214,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={acc.balance}
                   onChange={(e) =>
-                    handleChange(acc.account_id, "balance", e.target.value)
+                    handleChange(acc.user_id, "balance", e.target.value)
                   }
                 />
               </Td>
@@ -241,7 +224,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={acc.earned_profit}
                   onChange={(e) =>
-                    handleChange(acc.account_id, "earned_profit", e.target.value)
+                    handleChange(acc.user_id, "earned_profit", e.target.value)
                   }
                 />
               </Td>
@@ -251,7 +234,7 @@ export default function AdminDashboard() {
                   type="number"
                   value={acc.active_deposit}
                   onChange={(e) =>
-                    handleChange(acc.account_id, "active_deposit", e.target.value)
+                    handleChange(acc.user_id, "active_deposit", e.target.value)
                   }
                 />
               </Td>
@@ -259,7 +242,7 @@ export default function AdminDashboard() {
                 <Button
                   size="sm"
                   colorScheme="yellow"
-                  isLoading={savingId === acc.account_id}
+                  isLoading={savingId === acc.user_id}
                   onClick={() => handleSave(acc)}
                 >
                   Save
@@ -270,43 +253,47 @@ export default function AdminDashboard() {
         </Tbody>
       </Table>
 
-      <Divider mb={6} />
+      <Divider my={6} />
 
-      {/* ================= Support Messages ================= */}
       <Heading size="md" mb={4}>
         Live Support Messages
       </Heading>
-      {Object.keys(groupedMessages).map((userId) => (
-        <Box key={userId} mb={6} border="1px solid #eee" p={3} rounded="xl">
+
+      {Object.entries(groupedMessages).map(([userId, msgs]) => (
+        <Box key={userId} mb={6} p={4} border="1px solid #eee" rounded="xl">
           <Heading size="sm" mb={2}>
             User ID: {userId}
           </Heading>
-          <VStack spacing={2} align="stretch" maxH="300px" overflowY="auto">
-            {groupedMessages[userId].map((msg) => (
+
+          <VStack align="stretch">
+            {msgs.map((m) => (
               <Box
-                key={msg.id}
-                p={3}
-                rounded="lg"
-                bg={msg.sender === "user" ? "yellow.100" : "gray.200"}
+                key={m.id}
+                p={2}
+                bg={m.sender === "user" ? "yellow.100" : "gray.200"}
+                rounded="md"
               >
-                <Text fontWeight="bold">{msg.sender}:</Text>
-                <Text>{msg.message}</Text>
-                <Text fontSize="xs" color="gray.500">
-                  {new Date(msg.created_at).toLocaleString()}
-                </Text>
+                <Text fontWeight="bold">{m.sender}</Text>
+                <Text>{m.message}</Text>
               </Box>
             ))}
           </VStack>
 
-          {/* Reply input */}
           <HStack mt={2}>
             <Input
-              placeholder="Type a reply..."
+              placeholder="Reply..."
               value={replyInputs[userId] || ""}
-              onChange={(e) => handleReplyChange(userId, e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendReply(userId)}
+              onChange={(e) =>
+                setReplyInputs((p) => ({
+                  ...p,
+                  [userId]: e.target.value,
+                }))
+              }
             />
-            <Button colorScheme="yellow" onClick={() => sendReply(userId)}>
+            <Button
+              colorScheme="yellow"
+              onClick={() => sendReply(userId)}
+            >
               Send
             </Button>
           </HStack>
@@ -315,5 +302,3 @@ export default function AdminDashboard() {
     </Box>
   );
 }
-
-

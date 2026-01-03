@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Box, VStack, HStack, Text, Input, Button, Badge, IconButton } from "@chakra-ui/react";
+import {
+  Box,
+  VStack,
+  HStack,
+  Text,
+  Input,
+  Button,
+  Badge,
+  IconButton,
+} from "@chakra-ui/react";
 import { ChatIcon, CloseIcon } from "@chakra-ui/icons";
 import { supabase } from "@/lib/supabaseClient";
 import { keyframes } from "@emotion/react";
@@ -13,7 +22,7 @@ export default function GlobalChat() {
   const [open, setOpen] = useState(false);
   const bottomRef = useRef(null);
 
-  // Pop animation
+  // 🔔 Pop animation
   const pop = keyframes`
     0% { transform: scale(1); }
     25% { transform: scale(1.3); }
@@ -22,14 +31,14 @@ export default function GlobalChat() {
     100% { transform: scale(1); }
   `;
 
-  // Get user
+  // Get logged-in user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUserId(data.user.id);
     });
   }, []);
 
-  // Fetch messages & subscribe
+  // Fetch messages + realtime updates
   useEffect(() => {
     if (!userId) return;
 
@@ -39,8 +48,10 @@ export default function GlobalChat() {
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
+
       setMessages(data || []);
     };
+
     fetchMessages();
 
     const channel = supabase
@@ -56,7 +67,9 @@ export default function GlobalChat() {
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
 
   useEffect(() => {
@@ -65,50 +78,67 @@ export default function GlobalChat() {
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
+
     await supabase.from("support_messages").insert({
       user_id: userId,
       sender: "user",
       message: newMessage,
     });
+
     setNewMessage("");
   };
 
-  const unreadCount = messages.filter(m => m.sender === "admin" && !open).length;
+  const unreadCount = messages.filter(
+    (m) => m.sender === "admin" && !open
+  ).length;
 
   return (
-    <Box position="fixed" bottom="20px" right="20px" zIndex={9999}>
-      {/* Toggle button */}
-      <IconButton
-        icon={<ChatIcon />}
-        colorScheme="yellow"
-        borderRadius="full"
-        size="lg"
-        onClick={() => setOpen(!open)}
-        boxShadow="2xl"
-      />
-      {unreadCount > 0 && !open && (
-        <Badge
-          colorScheme="red"
+    <Box
+      position="fixed"
+      bottom={{ base: "16px", md: "20px" }}
+      left={{ base: "50%", md: "auto" }}
+      right={{ base: "auto", md: "20px" }}
+      transform={{ base: "translateX(-50%)", md: "none" }}
+      zIndex={9999}
+    >
+      {/* 🔘 Toggle button */}
+      <Box position="relative">
+        <IconButton
+          icon={<ChatIcon />}
+          colorScheme="yellow"
           borderRadius="full"
-          ml="-2"
-          mt="-2"
-          sx={{ animation: `${pop} 0.6s ease-in-out infinite` }}
-        >
-          {unreadCount}
-        </Badge>
-      )}
+          size="lg"
+          onClick={() => setOpen(!open)}
+          boxShadow="2xl"
+        />
 
+        {unreadCount > 0 && !open && (
+          <Badge
+            colorScheme="red"
+            borderRadius="full"
+            position="absolute"
+            top="-1"
+            right="-1"
+            px={2}
+            sx={{ animation: `${pop} 0.6s ease-in-out infinite` }}
+          >
+            {unreadCount}
+          </Badge>
+        )}
+      </Box>
+
+      {/* 💬 Chat window */}
       {open && (
         <Box
-          w="360px"
-          h="450px"
+          w={{ base: "92vw", md: "360px" }}
+          h={{ base: "70vh", md: "450px" }}
           bg="white"
           shadow="2xl"
           rounded="3xl"
           display="flex"
           flexDirection="column"
           overflow="hidden"
-          mt={2}
+          mt={3}
           border="2px solid #FFD700"
         >
           {/* Header */}
@@ -120,9 +150,14 @@ export default function GlobalChat() {
             position="relative"
           >
             <Box>
-              <Text fontWeight="bold" color="black">💬 Support Chat</Text>
-              <Text fontSize="xs" color="blackAlpha.800">Usually replies within minutes</Text>
+              <Text fontWeight="bold" color="black">
+                💬 Support Chat
+              </Text>
+              <Text fontSize="xs" color="blackAlpha.800">
+                Usually replies within minutes
+              </Text>
             </Box>
+
             <IconButton
               aria-label="Close chat"
               icon={<CloseIcon />}
@@ -130,27 +165,21 @@ export default function GlobalChat() {
               colorScheme="red"
               onClick={() => setOpen(false)}
             />
-
-            {/* Notification inside header */}
-            {unreadCount > 0 && (
-              <Badge
-                colorScheme="red"
-                position="absolute"
-                top="0"
-                right="0"
-                m={2}
-                borderRadius="full"
-                sx={{ animation: `${pop} 0.6s ease-in-out infinite` }}
-              >
-                {unreadCount}
-              </Badge>
-            )}
           </HStack>
 
           {/* Messages */}
-          <VStack flex="1" p={3} spacing={2} overflowY="auto" align="stretch">
+          <VStack
+            flex="1"
+            p={3}
+            spacing={2}
+            overflowY="auto"
+            align="stretch"
+          >
             {messages.map((msg) => (
-              <HStack key={msg.id} justify={msg.sender === "user" ? "flex-end" : "flex-start"}>
+              <HStack
+                key={msg.id}
+                justify={msg.sender === "user" ? "flex-end" : "flex-start"}
+              >
                 <Box
                   bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
                   px={4}
@@ -174,7 +203,9 @@ export default function GlobalChat() {
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendMessage()}
             />
-            <Button colorScheme="yellow" onClick={sendMessage}>Send</Button>
+            <Button colorScheme="yellow" onClick={sendMessage}>
+              Send
+            </Button>
           </HStack>
         </Box>
       )}
