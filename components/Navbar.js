@@ -16,7 +16,7 @@ import { HamburgerIcon, CloseIcon } from "@chakra-ui/icons";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useLoading } from "@/components/context/LoadingContext"; 
+import { useLoading } from "@/components/context/LoadingContext";
 
 /* FALLBACK ASSETS & NEWS */
 const FALLBACK_ASSETS = [
@@ -40,7 +40,7 @@ const FALLBACK_NEWS = [
 ];
 
 export default function Navbar() {
-  const { isOpen, onToggle } = useDisclosure();
+  const { isOpen, onToggle, onClose } = useDisclosure();
   const router = useRouter();
   const { setLoading, setType } = useLoading();
 
@@ -55,6 +55,7 @@ export default function Navbar() {
     }, 50);
   };
 
+  // Updated NavLink: closes mobile menu automatically when clicked
   const NavLink = ({ href, children }) => (
     <ChakraLink
       px={3}
@@ -64,7 +65,7 @@ export default function Navbar() {
       color="white"
       _hover={{ bg: "rgba(255,255,255,0.15)", textDecoration: "none" }}
       onClick={() => {
-        if (isOpen) onToggle();
+        if (isOpen) onClose(); // ✅ close mobile menu immediately
         go(href);
       }}
     >
@@ -99,58 +100,119 @@ export default function Navbar() {
 
   return (
     <Box position="sticky" top="0" zIndex="1000">
-    
-    
+      <Box bg="gray.900" boxShadow="md">
+        <Flex
+          h={20}
+          maxW="7xl"
+          mx="auto"
+          px={4}
+          align="center"
+          justify="space-between"
+        >
+          <Box cursor="pointer" onClick={() => go("/")}>
+            <Image src="/images/logo.png" alt="Logo" width={100} height={40} />
+          </Box>
 
-      {/* Assets ticker */}
-      <Box bg="gray.900" overflow="hidden" py={2}>
-        <Flex w="max-content" animation={`ticker ${assetsDuration} linear infinite`}>
-          <Flex gap={10} whiteSpace="nowrap">
-            {assets.map((a, i) => (
-              <Text
-                key={`a-${i}`}
-                fontSize="sm"
-                fontWeight="bold"
-                color={a.up ? "green.300" : "red.300"}
-              >
-                {a.symbol} {a.price} {a.up ? "▲" : "▼"}
-              </Text>
-            ))}
-          </Flex>
-          <Flex gap={10} whiteSpace="nowrap">
-            {assets.map((a, i) => (
-              <Text
-                key={`b-${i}`}
-                fontSize="sm"
-                fontWeight="bold"
-                color={a.up ? "green.300" : "red.300"}
-              >
-                {a.symbol} {a.price} {a.up ? "▲" : "▼"}
-              </Text>
-            ))}
-          </Flex>
+          {/* Desktop Links */}
+          <HStack spacing={6} display={{ base: "none", md: "flex" }}>
+            <NavLink href="/">Home</NavLink>
+            <NavLink href="/markets">Markets</NavLink>
+            <NavLink href="/platforms">Platforms</NavLink>
+            <NavLink href="/about">About</NavLink>
+            <NavLink href="/contact">Contact</NavLink>
+            <Button
+              colorScheme="yellow"
+              onClick={() => go("/login")}
+              size="sm"
+            >
+              Login
+            </Button>
+          </HStack>
+
+          {/* Mobile menu toggle */}
+          <IconButton
+            icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
+            display={{ md: "none" }}
+            onClick={onToggle}
+            bg="transparent"
+            color="white"
+            aria-label="Toggle Menu"
+          />
         </Flex>
+
+        {/* Assets ticker */}
+        <Box bg="gray.900" overflow="hidden" py={2}>
+          <Flex w="max-content" animation={`ticker ${assetsDuration} linear infinite`}>
+            <Flex gap={10} whiteSpace="nowrap">
+              {assets.map((a, i) => (
+                <Text
+                  key={`a-${i}`}
+                  fontSize="sm"
+                  fontWeight="bold"
+                  color={a.up ? "green.300" : "red.300"}
+                >
+                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
+                </Text>
+              ))}
+            </Flex>
+            <Flex gap={10} whiteSpace="nowrap">
+              {assets.map((a, i) => (
+                <Text
+                  key={`b-${i}`}
+                  fontSize="sm"
+                  fontWeight="bold"
+                  color={a.up ? "green.300" : "red.300"}
+                >
+                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
+                </Text>
+              ))}
+            </Flex>
+          </Flex>
+        </Box>
+
+        {/* News ticker */}
+        <Box bg="gray.800" overflow="hidden" py={2}>
+          <Flex w="max-content" animation={`ticker ${newsDuration} linear infinite`}>
+            <Flex gap={10} whiteSpace="nowrap">
+              {news.map((n, i) => (
+                <Text key={`n-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
+                  📰 {n}
+                </Text>
+              ))}
+            </Flex>
+            <Flex gap={10} whiteSpace="nowrap">
+              {news.map((n, i) => (
+                <Text key={`m-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
+                  📰 {n}
+                </Text>
+              ))}
+            </Flex>
+          </Flex>
+        </Box>
       </Box>
 
-      {/* News ticker */}
-      <Box bg="gray.800" overflow="hidden" py={2}>
-        <Flex w="max-content" animation={`ticker ${newsDuration} linear infinite`}>
-          <Flex gap={10} whiteSpace="nowrap">
-            {news.map((n, i) => (
-              <Text key={`n-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
-                📰 {n}
-              </Text>
-            ))}
-          </Flex>
-          <Flex gap={10} whiteSpace="nowrap">
-            {news.map((n, i) => (
-              <Text key={`m-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
-                📰 {n}
-              </Text>
-            ))}
-          </Flex>
-        </Flex>
-      </Box>
+      {/* Mobile menu */}
+      <Collapse in={isOpen} animateOpacity>
+        <Box bg="gray.900" pb={4} display={{ md: "none" }}>
+          <Stack px={4} spacing={3}>
+            <NavLink href="/">Home</NavLink>
+            <NavLink href="/markets">Markets</NavLink>
+            <NavLink href="/platforms">Platforms</NavLink>
+            <NavLink href="/about">About</NavLink>
+            <NavLink href="/contact">Contact</NavLink>
+            <Button
+              colorScheme="yellow"
+              onClick={() => {
+                onClose(); // ✅ close mobile menu immediately
+                go("/login");
+              }}
+              w="full"
+            >
+              Login
+            </Button>
+          </Stack>
+        </Box>
+      </Collapse>
 
       <style jsx global>{`
         @keyframes ticker {

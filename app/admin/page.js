@@ -44,7 +44,6 @@ export default function AdminDashboard() {
         throw new Error(result.error || "Failed to fetch users");
       }
 
-      // ✅ FIX: result.data is the array (not result itself)
       const sanitized = result.data.map((acc) => ({
         ...acc,
         balance: acc.balance ?? 0,
@@ -83,17 +82,15 @@ export default function AdminDashboard() {
     setSavingId(account.user_id);
 
     try {
-      const payload = {
-        id: account.account_id,
-        balance: Number(account.balance),
-        earned_profit: Number(account.earned_profit),
-        active_deposit: Number(account.active_deposit),
-      };
-
       const res = await fetch("/api/admin/updateAccount", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          id: account.account_id,
+          balance: Number(account.balance),
+          earned_profit: Number(account.earned_profit),
+          active_deposit: Number(account.active_deposit),
+        }),
       });
 
       const result = await res.json();
@@ -154,22 +151,13 @@ export default function AdminDashboard() {
     const message = replyInputs[userId]?.trim();
     if (!message) return;
 
-    try {
-      await supabase.from("support_messages").insert({
-        user_id: userId,
-        sender: "admin",
-        message,
-      });
+    await supabase.from("support_messages").insert({
+      user_id: userId,
+      sender: "admin",
+      message,
+    });
 
-      setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
-    } catch (err) {
-      toast({
-        title: "Error sending reply",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
-    }
+    setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
   };
 
   if (loading) {
@@ -187,85 +175,98 @@ export default function AdminDashboard() {
   }, {});
 
   return (
-    <Box p={8}>
-      <Heading mb={6}>Admin Dashboard – Registered Users</Heading>
+    <Box p={[4, 6, 8]} maxW="100vw">
+      <Heading mb={6} fontSize={["xl", "2xl"]}>
+        Admin Dashboard
+      </Heading>
 
-      <Table size="sm" mb={12}>
-        <Thead>
-          <Tr>
-            <Th>Name</Th>
-            <Th>Email</Th>
-            <Th>Phone</Th>
-            <Th>Balance</Th>
-            <Th>Profit</Th>
-            <Th>Deposit</Th>
-            <Th>Action</Th>
-          </Tr>
-        </Thead>
-        <Tbody>
-          {accounts.map((acc) => (
-            <Tr key={acc.user_id}>
-              <Td>{acc.full_name}</Td>
-              <Td>{acc.email}</Td>
-              <Td>{acc.phone}</Td>
-              <Td>
-                <Input
-                  size="sm"
-                  type="number"
-                  value={acc.balance}
-                  onChange={(e) =>
-                    handleChange(acc.user_id, "balance", e.target.value)
-                  }
-                />
-              </Td>
-              <Td>
-                <Input
-                  size="sm"
-                  type="number"
-                  value={acc.earned_profit}
-                  onChange={(e) =>
-                    handleChange(acc.user_id, "earned_profit", e.target.value)
-                  }
-                />
-              </Td>
-              <Td>
-                <Input
-                  size="sm"
-                  type="number"
-                  value={acc.active_deposit}
-                  onChange={(e) =>
-                    handleChange(acc.user_id, "active_deposit", e.target.value)
-                  }
-                />
-              </Td>
-              <Td>
-                <Button
-                  size="sm"
-                  colorScheme="yellow"
-                  isLoading={savingId === acc.user_id}
-                  onClick={() => handleSave(acc)}
-                >
-                  Save
-                </Button>
-              </Td>
+      {/* -------- RESPONSIVE TABLE -------- */}
+      <Box overflowX="auto" mb={10}>
+        <Table size="sm" minW="900px">
+          <Thead>
+            <Tr>
+              <Th>Name</Th>
+              <Th>Email</Th>
+              <Th>Phone</Th>
+              <Th>Balance</Th>
+              <Th>Profit</Th>
+              <Th>Deposit</Th>
+              <Th>Action</Th>
             </Tr>
-          ))}
-        </Tbody>
-      </Table>
+          </Thead>
+          <Tbody>
+            {accounts.map((acc) => (
+              <Tr key={acc.user_id}>
+                <Td>{acc.full_name}</Td>
+                <Td>{acc.email}</Td>
+                <Td>{acc.phone}</Td>
+                <Td>
+                  <Input
+                    size="sm"
+                    type="number"
+                    value={acc.balance}
+                    onChange={(e) =>
+                      handleChange(acc.user_id, "balance", e.target.value)
+                    }
+                  />
+                </Td>
+                <Td>
+                  <Input
+                    size="sm"
+                    type="number"
+                    value={acc.earned_profit}
+                    onChange={(e) =>
+                      handleChange(acc.user_id, "earned_profit", e.target.value)
+                    }
+                  />
+                </Td>
+                <Td>
+                  <Input
+                    size="sm"
+                    type="number"
+                    value={acc.active_deposit}
+                    onChange={(e) =>
+                      handleChange(acc.user_id, "active_deposit", e.target.value)
+                    }
+                  />
+                </Td>
+                <Td>
+                  <Button
+                    size="sm"
+                    colorScheme="yellow"
+                    isLoading={savingId === acc.user_id}
+                    onClick={() => handleSave(acc)}
+                  >
+                    Save
+                  </Button>
+                </Td>
+              </Tr>
+            ))}
+          </Tbody>
+        </Table>
+      </Box>
 
       <Divider my={6} />
 
+      {/* -------- SUPPORT CHAT -------- */}
       <Heading size="md" mb={4}>
         Live Support Messages
       </Heading>
 
       {Object.entries(groupedMessages).map(([userId, msgs]) => (
-        <Box key={userId} mb={6} p={4} border="1px solid #eee" rounded="xl">
-          <Heading size="sm" mb={2}>
+        <Box
+          key={userId}
+          mb={6}
+          p={4}
+          border="1px solid"
+          borderColor="gray.200"
+          rounded="xl"
+        >
+          <Text fontWeight="bold" mb={2}>
             User ID: {userId}
-          </Heading>
+          </Text>
 
-          <VStack align="stretch">
+          <VStack align="stretch" spacing={2}>
             {msgs.map((m) => (
               <Box
                 key={m.id}
@@ -273,15 +274,18 @@ export default function AdminDashboard() {
                 bg={m.sender === "user" ? "yellow.100" : "gray.200"}
                 rounded="md"
               >
-                <Text fontWeight="bold">{m.sender}</Text>
-                <Text>{m.message}</Text>
+                <Text fontSize="sm" fontWeight="bold">
+                  {m.sender}
+                </Text>
+                <Text fontSize="sm">{m.message}</Text>
               </Box>
             ))}
           </VStack>
 
-          <HStack mt={2}>
+          <HStack mt={3} spacing={2}>
             <Input
               placeholder="Reply..."
+              size="sm"
               value={replyInputs[userId] || ""}
               onChange={(e) =>
                 setReplyInputs((p) => ({
@@ -291,6 +295,7 @@ export default function AdminDashboard() {
               }
             />
             <Button
+              size="sm"
               colorScheme="yellow"
               onClick={() => sendReply(userId)}
             >
@@ -302,3 +307,4 @@ export default function AdminDashboard() {
     </Box>
   );
 }
+

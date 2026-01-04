@@ -1,18 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Flex, VStack, Text, Heading, Button, Box, ScaleFade } from "@chakra-ui/react";
-import StarTrading from "./startrading"; // your StarTrading component
+import {
+  Flex,
+  VStack,
+  Text,
+  Heading,
+  Button,
+  Box,
+} from "@chakra-ui/react";
+import StarTrading from "./startrading";
 
 export default function StatTrading({ userId }) {
-  const [animate, setAnimate] = useState(false);
   const [showStarTrading, setShowStarTrading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleStartTrading = () => {
-    setAnimate(true); // trigger animation before showing next component
-    setTimeout(() => {
-      setShowStarTrading(true); // show the bot trading component
-    }, 1000);
+    if (loading) return; // prevent double taps
+    setLoading(true);
+    setShowStarTrading(true); // INSTANT transition
   };
 
   if (showStarTrading) {
@@ -21,79 +27,75 @@ export default function StatTrading({ userId }) {
 
   return (
     <Flex
-      h="100vh"
+      h="100dvh"
       w="100vw"
       bgImage="url('/images/start-bg.jpg')"
       bgSize="cover"
       bgPos="center"
-      bgRepeat="no-repeat"
       align="center"
       justify="center"
       position="relative"
       overflow="hidden"
     >
-      {/* Overlay — pointerEvents none allows button clicks through */}
+      {/* Overlay */}
       <Box
         position="absolute"
-        top={0}
-        left={0}
-        w="100%"
-        h="100%"
+        inset={0}
         bg="blackAlpha.600"
         pointerEvents="none"
       />
 
-      <ScaleFade initialScale={0.8} in={!animate}>
-        <VStack
-          spacing={6}
-          p={6} // slightly smaller padding for mobile
-          bg="whiteAlpha.900" // more opaque so text is readable
-          rounded="3xl"
-          shadow="2xl"
-          backdropFilter="blur(12px)"
-          zIndex={1}
-          align="center"
-          maxW="3xl"
-          textAlign="center"
+      {/* Main Card */}
+      <VStack
+        spacing={6}
+        p={{ base: 5, md: 8 }}
+        bg="whiteAlpha.900"
+        rounded="3xl"
+        shadow="2xl"
+        backdropFilter="blur(12px)"
+        zIndex={1}
+        align="center"
+        maxW="3xl"
+        textAlign="center"
+        transition="all 0.25s ease"
+      >
+        <Heading
+          size={{ base: "lg", md: "2xl" }}
+          color="yellow.400"
+          textShadow="2px 2px black"
         >
-          <Heading
-            size="2xl"
-            color="yellow.400"
-            textShadow="2px 2px black"
-            noOfLines={2} // prevent overflow on small screens
-          >
-            Welcome to DBossFX Trading Bot
-          </Heading>
+          Welcome to DBossFX Trading Bot
+        </Heading>
 
-          <Text fontSize={["md", "lg"]} color="gray.900" maxW="2xl">
-            Our AI-powered bot executes high-probability trades across Forex, Crypto, and Stocks
-            with real-time market data, indicators (Moving Average, RSI, Bollinger Bands, MACD,
-            Stochastic), and breaking news analysis. Enjoy 100% intelligent trading with zero
-            commission!
-          </Text>
+        <Text fontSize={{ base: "sm", md: "lg" }} color="gray.900">
+          Our AI-powered bot executes high-probability trades across Forex,
+          Crypto, and Stocks using real-time indicators and news analysis.
+        </Text>
 
-          <Text fontSize={["sm", "md"]} color="gray.700">
-            Your account is ready. Select the amount and start trading to see your profits grow
-            instantly.
-          </Text>
+        <Text fontSize={{ base: "sm", md: "md" }} color="gray.700">
+          Your account is ready. Tap below to start trading instantly.
+        </Text>
 
-          <Button
-            colorScheme="green"
-            size="lg"
-            px={[6, 12]} // responsive padding
-            py={[4, 6]}
-            fontSize={["md", "xl"]}
-            boxShadow="xl"
-            _hover={{ transform: "scale(1.05)", boxShadow: "2xl" }}
-            _active={{ transform: "scale(0.98)" }}
-            onClick={handleStartTrading}
-          >
-            Start Trading
-          </Button>
-        </VStack>
-      </ScaleFade>
+        {/* ✅ MOBILE-OPTIMIZED BUTTON */}
+        <Button
+          colorScheme="green"
+          size="lg"
+          px={{ base: 8, md: 12 }}
+          py={{ base: 6, md: 7 }}
+          fontSize={{ base: "lg", md: "xl" }}
+          boxShadow="xl"
+          isLoading={loading}
+          loadingText="Starting..."
+          onClick={handleStartTrading}
+          touchAction="manipulation"
+          minH="56px"
+          _active={{ transform: "scale(0.96)" }}
+        >
+          Start Trading
+        </Button>
+      </VStack>
 
-      {/* Animated shapes — pointerEvents none */}
+      {/* Decorative blobs */}
       <Box
         position="absolute"
         w="200px"
@@ -104,7 +106,6 @@ export default function StatTrading({ userId }) {
         left="5%"
         filter="blur(120px)"
         opacity={0.6}
-        animation="pulse 6s infinite"
         pointerEvents="none"
       />
       <Box
@@ -117,17 +118,8 @@ export default function StatTrading({ userId }) {
         right="5%"
         filter="blur(150px)"
         opacity={0.5}
-        animation="pulse 8s infinite alternate"
         pointerEvents="none"
       />
-
-      <style jsx global>{`
-        @keyframes pulse {
-          0% { transform: scale(0.8); opacity: 0.6; }
-          50% { transform: scale(1.2); opacity: 0.3; }
-          100% { transform: scale(0.8); opacity: 0.6; }
-        }
-      `}</style>
     </Flex>
   );
 }

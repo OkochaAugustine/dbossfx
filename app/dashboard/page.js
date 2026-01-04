@@ -18,31 +18,31 @@ import AccountStatement from "./components/AccountStatement";
 import StartTrading from "./components/startTrading";
 import News from "./news";
 import HistoryPage from "@/app/history/page";
-import Settings from "@/app/dashboard/settings"; // updated path
-import WithdrawPage from "./withdraw/page"; // ✅ Withdraw page
-import DepositPage from "./deposit/page";   // ✅ Deposit page
-import ChatPage from "./chat/page";         // ✅ Chat bot page
-import { supabase } from "@/lib/supabaseClient";
+import Settings from "@/app/dashboard/settings";
+import WithdrawPage from "./withdraw/page";
+import DepositPage from "./deposit/page";
+import ChatPage from "./chat/page";
 
-// ✅ IMPORT LOADING SCREEN
+import { supabase } from "@/lib/supabaseClient";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useLoading } from "@/components/context/LoadingContext";
 
 export default function DashboardPage() {
-  const { loading, type } = useLoading(); // ✅ useLoading context
+  const { loading, type } = useLoading();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [userId, setUserId] = useState(null);
   const [loadingUser, setLoadingUser] = useState(true);
   const [activeView, setActiveView] = useState("dashboard");
 
+  const links = ["dashboard", "news", "history", "settings", "chat"];
+
+  // Fetch user session
   useEffect(() => {
     let isMounted = true;
 
     const getUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!isMounted) return;
       if (user) setUserId(user.id);
       setLoadingUser(false);
@@ -50,9 +50,7 @@ export default function DashboardPage() {
 
     getUser();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted) return;
       setUserId(session?.user?.id || null);
     });
@@ -62,8 +60,6 @@ export default function DashboardPage() {
       subscription.unsubscribe();
     };
   }, []);
-
-  const links = ["dashboard", "news", "history", "settings", "chat"];
 
   return (
     <Flex
@@ -80,7 +76,7 @@ export default function DashboardPage() {
         bg="url('/images/side-bg.png')"
         bgSize="cover"
         bgPos="center"
-        p={6}
+        p={4}
         spacing={4}
         align="stretch"
       >
@@ -93,7 +89,7 @@ export default function DashboardPage() {
         {links.map((p) => (
           <Button
             key={p}
-            variant="ghost"
+            variant={activeView === p ? "solid" : "ghost"}
             justifyContent="flex-start"
             color="white"
             onClick={() => setActiveView(p)}
@@ -164,7 +160,7 @@ export default function DashboardPage() {
           {links.map((p) => (
             <Button
               key={p}
-              variant="ghost"
+              variant={activeView === p ? "solid" : "ghost"}
               justifyContent="flex-start"
               color="white"
               onClick={() => {
@@ -204,7 +200,6 @@ export default function DashboardPage() {
 
       {/* ================= MAIN CONTENT ================= */}
       <Flex flex="1" direction="column" overflow="hidden">
-        {/* ✅ SHOW LOADING SCREEN IF dashboard type */}
         {loading && type === "dashboard" && <LoadingScreen type="dashboard" />}
 
         <Box flex="1" p={{ base: 2, md: 6 }} overflow="auto">
@@ -212,15 +207,18 @@ export default function DashboardPage() {
             <>
               {activeView === "dashboard" && (
                 <>
-                  <HStack mb={3}>
+                  <HStack mb={3} wrap="wrap" gap={2}>
                     <Button
                       colorScheme="green"
-                      flex="1"
+                      flex={{ base: "1 1 100%", md: "1" }}
                       onClick={() => setActiveView("startTrading")}
                     >
                       Start Trading
                     </Button>
-                    <Button colorScheme="blue" flex="1">
+                    <Button
+                      colorScheme="blue"
+                      flex={{ base: "1 1 100%", md: "1" }}
+                    >
                       Create Demo Account
                     </Button>
                   </HStack>
@@ -234,7 +232,7 @@ export default function DashboardPage() {
               {activeView === "settings" && <Settings />}
               {activeView === "withdraw" && <WithdrawPage userId={userId} />}
               {activeView === "deposit" && <DepositPage userId={userId} />}
-              {activeView === "chat" && <ChatPage />} {/* ✅ Chat bot */}
+              {activeView === "chat" && <ChatPage />}
             </>
           ) : (
             <Flex h="60vh" align="center" justify="center">

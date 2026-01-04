@@ -22,7 +22,6 @@ export default function GlobalChat() {
   const [open, setOpen] = useState(false);
   const bottomRef = useRef(null);
 
-  // 🔔 Pop animation
   const pop = keyframes`
     0% { transform: scale(1); }
     25% { transform: scale(1.3); }
@@ -31,14 +30,12 @@ export default function GlobalChat() {
     100% { transform: scale(1); }
   `;
 
-  // Get logged-in user
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUserId(data.user.id);
     });
   }, []);
 
-  // Fetch messages + realtime updates
   useEffect(() => {
     if (!userId) return;
 
@@ -67,9 +64,7 @@ export default function GlobalChat() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [userId]);
 
   useEffect(() => {
@@ -77,7 +72,7 @@ export default function GlobalChat() {
   }, [messages, open]);
 
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !userId) return;
 
     await supabase.from("support_messages").insert({
       user_id: userId,
@@ -95,120 +90,129 @@ export default function GlobalChat() {
   return (
     <Box
       position="fixed"
-      bottom={{ base: "16px", md: "20px" }}
-      left={{ base: "50%", md: "auto" }}
-      right={{ base: "auto", md: "20px" }}
-      transform={{ base: "translateX(-50%)", md: "none" }}
-      zIndex={9999}
+      bottom={{ base: "env(safe-area-inset-bottom, 16px)", md: "20px" }}
+      left="50%"
+      transform="translateX(-50%)"
+      zIndex={1000}
+      pointerEvents="none"
+      width="100%"
+      display="flex"
+      justifyContent="center"
     >
-      {/* 🔘 Toggle button */}
-      <Box position="relative">
-        <IconButton
-          icon={<ChatIcon />}
-          colorScheme="yellow"
-          borderRadius="full"
-          size="lg"
-          onClick={() => setOpen(!open)}
-          boxShadow="2xl"
-        />
-
-        {unreadCount > 0 && !open && (
-          <Badge
-            colorScheme="red"
+      <Box pointerEvents="auto">
+        {/* Toggle button */}
+        <Box position="relative" display="flex" justifyContent="center">
+          <IconButton
+            icon={<ChatIcon />}
+            colorScheme="yellow"
             borderRadius="full"
-            position="absolute"
-            top="-1"
-            right="-1"
-            px={2}
-            sx={{ animation: `${pop} 0.6s ease-in-out infinite` }}
+            size="lg"
+            minH="56px"
+            minW="56px"
+            boxShadow="2xl"
+            onClick={() => setOpen((v) => !v)}
+            touchAction="manipulation"
+          />
+
+          {unreadCount > 0 && !open && (
+            <Badge
+              colorScheme="red"
+              borderRadius="full"
+              position="absolute"
+              top="-1"
+              right="-1"
+              px={2}
+              sx={{ animation: `${pop} 0.6s ease-in-out infinite` }}
+            >
+              {unreadCount}
+            </Badge>
+          )}
+        </Box>
+
+        {/* Chat window */}
+        {open && (
+          <Box
+            mt={3}
+            w={{ base: "94vw", sm: "420px" }}
+            h={{ base: "75dvh", md: "450px" }}
+            bg="white"
+            shadow="2xl"
+            rounded="3xl"
+            display="flex"
+            flexDirection="column"
+            overflow="hidden"
+            border="2px solid #FFD700"
           >
-            {unreadCount}
-          </Badge>
+            {/* Header */}
+            <HStack
+              bgGradient="linear(to-r, yellow.400, yellow.500)"
+              p={3}
+              justify="space-between"
+            >
+              <Box>
+                <Text fontWeight="bold">💬 Support Chat</Text>
+                <Text fontSize="xs">
+                  Usually replies within minutes
+                </Text>
+              </Box>
+
+              <IconButton
+                aria-label="Close"
+                icon={<CloseIcon />}
+                size="sm"
+                colorScheme="red"
+                onClick={() => setOpen(false)}
+              />
+            </HStack>
+
+            {/* Messages */}
+            <VStack
+              flex="1"
+              p={3}
+              spacing={2}
+              overflowY="auto"
+              align="stretch"
+            >
+              {messages.map((msg) => (
+                <HStack
+                  key={msg.id}
+                  justify={
+                    msg.sender === "user" ? "flex-end" : "flex-start"
+                  }
+                >
+                  <Box
+                    bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
+                    px={4}
+                    py={2}
+                    rounded="2xl"
+                    maxW="80%"
+                  >
+                    <Text fontSize="sm">{msg.message}</Text>
+                  </Box>
+                </HStack>
+              ))}
+              <div ref={bottomRef} />
+            </VStack>
+
+            {/* Input */}
+            <HStack p={3} borderTop="1px solid #eee">
+              <Input
+                placeholder="Type a message..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              />
+              <Button
+                colorScheme="yellow"
+                minH="44px"
+                onClick={sendMessage}
+              >
+                Send
+              </Button>
+            </HStack>
+          </Box>
         )}
       </Box>
-
-      {/* 💬 Chat window */}
-      {open && (
-        <Box
-          w={{ base: "92vw", md: "360px" }}
-          h={{ base: "70vh", md: "450px" }}
-          bg="white"
-          shadow="2xl"
-          rounded="3xl"
-          display="flex"
-          flexDirection="column"
-          overflow="hidden"
-          mt={3}
-          border="2px solid #FFD700"
-        >
-          {/* Header */}
-          <HStack
-            bgGradient="linear(to-r, yellow.400, yellow.500)"
-            p={3}
-            justify="space-between"
-            align="center"
-            position="relative"
-          >
-            <Box>
-              <Text fontWeight="bold" color="black">
-                💬 Support Chat
-              </Text>
-              <Text fontSize="xs" color="blackAlpha.800">
-                Usually replies within minutes
-              </Text>
-            </Box>
-
-            <IconButton
-              aria-label="Close chat"
-              icon={<CloseIcon />}
-              size="sm"
-              colorScheme="red"
-              onClick={() => setOpen(false)}
-            />
-          </HStack>
-
-          {/* Messages */}
-          <VStack
-            flex="1"
-            p={3}
-            spacing={2}
-            overflowY="auto"
-            align="stretch"
-          >
-            {messages.map((msg) => (
-              <HStack
-                key={msg.id}
-                justify={msg.sender === "user" ? "flex-end" : "flex-start"}
-              >
-                <Box
-                  bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
-                  px={4}
-                  py={2}
-                  rounded="2xl"
-                  maxW="75%"
-                  boxShadow="md"
-                >
-                  <Text fontSize="sm">{msg.message}</Text>
-                </Box>
-              </HStack>
-            ))}
-            <div ref={bottomRef} />
-          </VStack>
-
-          {/* Input */}
-          <HStack p={3} borderTop="1px solid #eee">
-            <Input
-              placeholder="Type a message..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            />
-            <Button colorScheme="yellow" onClick={sendMessage}>
-              Send
-            </Button>
-          </HStack>
-        </Box>
-      )}
     </Box>
   );
 }
