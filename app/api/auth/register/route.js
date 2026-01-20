@@ -1,20 +1,24 @@
+// Force Node runtime to access server env vars
+export const runtime = "nodejs";
+
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export async function POST(req) {
   try {
     const { fullName, email, phone, password } = await req.json();
 
+    // 1️⃣ Validate input
     if (!fullName || !email || !password) {
-      return Response.json(
-        { error: "Missing fields" },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: "Missing fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // ✅ Create Supabase client at runtime (NOT at import time)
+    // 2️⃣ Create server-side Supabase client
     const supabaseServer = getSupabaseServer();
 
-    // 1️⃣ Create auth user
+    // 3️⃣ Create auth user
     const { data, error } = await supabaseServer.auth.signUp({
       email,
       password,
@@ -24,15 +28,15 @@ export async function POST(req) {
     });
 
     if (error) {
-      return Response.json(
-        { error: error.message },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: error.message }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
     const userId = data.user.id;
 
-    // 2️⃣ Insert into public.users
+    // 4️⃣ Insert user profile into public.users
     const { error: profileError } = await supabaseServer
       .from("users")
       .insert({
@@ -43,22 +47,24 @@ export async function POST(req) {
       });
 
     if (profileError) {
-      return Response.json(
-        { error: "Profile insert failed: " + profileError.message },
-        { status: 500 }
+      return new Response(
+        JSON.stringify({ error: "Profile insert failed: " + profileError.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // 3️⃣ account_statements is created by trigger ✅
+    // 5️⃣ account_statements created automatically by trigger
 
-    return Response.json({
-      message: "Registration successful. Check your email.",
-    });
+    return new Response(
+      JSON.stringify({ message: "Registration successful. Check your email." }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
 
   } catch (err) {
-    return Response.json(
-      { error: "Server error: " + err.message },
-      { status: 500 }
+    console.error("Registration Error:", err);
+    return new Response(
+      JSON.stringify({ error: "Server error: " + err.message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }

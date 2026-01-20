@@ -1,9 +1,22 @@
 "use client";
+export const runtime = "nodejs";
 
 import { useState } from "react";
 import {
-  Box, Stack, Heading, Text, Input, Button, VStack, FormControl, FormLabel,
-  InputGroup, InputRightElement, useToast, Spinner, Center
+  Box,
+  Stack,
+  Heading,
+  Text,
+  Input,
+  Button,
+  VStack,
+  FormControl,
+  FormLabel,
+  InputGroup,
+  InputRightElement,
+  useToast,
+  Spinner,
+  Center,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
@@ -24,12 +37,19 @@ export default function LoginPage() {
     e.preventDefault();
 
     if (!form.email || !form.password) {
-      toast({ title: "Please fill all fields", status: "error", duration: 3000 });
+      toast({
+        title: "Please fill all fields",
+        status: "error",
+        duration: 3000,
+      });
       return;
     }
 
     try {
       setLoading(true);
+
+      // optional debug (remove after confirmed working)
+      console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
 
       const { data, error } = await supabase.auth.signInWithPassword({
         email: form.email,
@@ -38,15 +58,21 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      toast({ title: `Welcome back, ${data.user.email}!`, status: "success", duration: 3000 });
-      router.push("/dashboard"); // redirect to dashboard
+      toast({
+        title: `Welcome back, ${data.user.email}!`,
+        status: "success",
+        duration: 3000,
+      });
 
+      router.push("/dashboard");
     } catch (err) {
+      console.error("LOGIN ERROR:", err);
+
       toast({
         title: "Login failed",
-        description: err.message || err.error_description,
+        description: err?.message || "Network error. Check console.",
         status: "error",
-        duration: 4000,
+        duration: 5000,
       });
     } finally {
       setLoading(false);
@@ -58,7 +84,9 @@ export default function LoginPage() {
       <Center bg="gray.50" minH="100vh">
         <VStack spacing={4}>
           <Spinner size="xl" color="yellow.400" />
-          <Text fontSize="lg" fontWeight="bold">Logging in...</Text>
+          <Text fontSize="lg" fontWeight="bold">
+            Logging in...
+          </Text>
         </VStack>
       </Center>
     );
@@ -66,9 +94,19 @@ export default function LoginPage() {
 
   return (
     <Box bg="gray.50" minH="100vh" py={16}>
-      <Stack maxW="500px" mx="auto" spacing={8} bg="white" p={10} rounded="2xl" shadow="xl">
+      <Stack
+        maxW="500px"
+        mx="auto"
+        spacing={8}
+        bg="white"
+        p={10}
+        rounded="2xl"
+        shadow="xl"
+      >
         <Heading textAlign="center">Login to Your Account</Heading>
-        <Text textAlign="center" color="gray.600">Welcome back! Please enter your credentials to continue.</Text>
+        <Text textAlign="center" color="gray.600">
+          Welcome back! Please enter your credentials to continue.
+        </Text>
 
         <form onSubmit={handleSubmit}>
           <VStack spacing={4}>
@@ -94,14 +132,20 @@ export default function LoginPage() {
                   onChange={handleChange}
                 />
                 <InputRightElement width="4.5rem">
-                  <Button h="1.75rem" size="sm" onClick={() => setShowPassword(!showPassword)}>
+                  <Button
+                    h="1.75rem"
+                    size="sm"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
                     {showPassword ? "Hide" : "Show"}
                   </Button>
                 </InputRightElement>
               </InputGroup>
             </FormControl>
 
-            <Button colorScheme="yellow" w="full" type="submit">Login</Button>
+            <Button colorScheme="yellow" w="full" type="submit">
+              Login
+            </Button>
 
             <Text textAlign="center" color="gray.500">
               Don't have an account?{" "}
