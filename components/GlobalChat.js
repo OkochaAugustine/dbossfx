@@ -12,7 +12,7 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import { ChatIcon, CloseIcon } from "@chakra-ui/icons";
-import { supabase } from "@/lib/supabaseClient";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import { keyframes } from "@emotion/react";
 
 export default function GlobalChat() {
@@ -30,14 +30,22 @@ export default function GlobalChat() {
     100% { transform: scale(1); }
   `;
 
+  // ✅ Get logged-in user safely
   useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
+
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user) setUserId(data.user.id);
     });
   }, []);
 
+  // ✅ Fetch messages + realtime subscription
   useEffect(() => {
     if (!userId) return;
+
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
 
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -64,15 +72,21 @@ export default function GlobalChat() {
       )
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
+  // ✅ Send message safely
   const sendMessage = async () => {
     if (!newMessage.trim() || !userId) return;
+
+    const supabase = getSupabaseClient();
+    if (!supabase) return;
 
     await supabase.from("support_messages").insert({
       user_id: userId,
@@ -111,7 +125,6 @@ export default function GlobalChat() {
             minW="56px"
             boxShadow="2xl"
             onClick={() => setOpen((v) => !v)}
-            touchAction="manipulation"
           />
 
           {unreadCount > 0 && !open && (
@@ -143,7 +156,6 @@ export default function GlobalChat() {
             overflow="hidden"
             border="2px solid #FFD700"
           >
-            {/* Header */}
             <HStack
               bgGradient="linear(to-r, yellow.400, yellow.500)"
               p={3}
@@ -151,9 +163,7 @@ export default function GlobalChat() {
             >
               <Box>
                 <Text fontWeight="bold">💬 Support Chat</Text>
-                <Text fontSize="xs">
-                  Usually replies within minutes
-                </Text>
+                <Text fontSize="xs">Usually replies within minutes</Text>
               </Box>
 
               <IconButton
@@ -165,7 +175,6 @@ export default function GlobalChat() {
               />
             </HStack>
 
-            {/* Messages */}
             <VStack
               flex="1"
               p={3}
@@ -194,7 +203,6 @@ export default function GlobalChat() {
               <div ref={bottomRef} />
             </VStack>
 
-            {/* Input */}
             <HStack p={3} borderTop="1px solid #eee">
               <Input
                 placeholder="Type a message..."
@@ -202,11 +210,7 @@ export default function GlobalChat() {
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
-              <Button
-                colorScheme="yellow"
-                minH="44px"
-                onClick={sendMessage}
-              >
+              <Button colorScheme="yellow" onClick={sendMessage}>
                 Send
               </Button>
             </HStack>
