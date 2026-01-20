@@ -12,7 +12,7 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import { ChatIcon, CloseIcon } from "@chakra-ui/icons";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient";
 import { keyframes } from "@emotion/react";
 
 export default function GlobalChat() {
@@ -30,22 +30,18 @@ export default function GlobalChat() {
     100% { transform: scale(1); }
   `;
 
-  // ✅ Get logged-in user safely
+  // Get current user
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
-
-    supabase.auth.getUser().then(({ data }) => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
       if (data?.user) setUserId(data.user.id);
-    });
+    };
+    fetchUser();
   }, []);
 
-  // ✅ Fetch messages + realtime subscription
+  // Fetch messages & subscribe to real-time updates
   useEffect(() => {
     if (!userId) return;
-
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
 
     const fetchMessages = async () => {
       const { data } = await supabase
@@ -53,7 +49,6 @@ export default function GlobalChat() {
         .select("*")
         .eq("user_id", userId)
         .order("created_at", { ascending: true });
-
       setMessages(data || []);
     };
 
@@ -72,21 +67,17 @@ export default function GlobalChat() {
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [userId]);
 
+  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  // ✅ Send message safely
+  // Send message
   const sendMessage = async () => {
     if (!newMessage.trim() || !userId) return;
-
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
 
     await supabase.from("support_messages").insert({
       user_id: userId,
@@ -97,9 +88,7 @@ export default function GlobalChat() {
     setNewMessage("");
   };
 
-  const unreadCount = messages.filter(
-    (m) => m.sender === "admin" && !open
-  ).length;
+  const unreadCount = messages.filter((m) => m.sender === "admin" && !open).length;
 
   return (
     <Box
@@ -125,6 +114,7 @@ export default function GlobalChat() {
             minW="56px"
             boxShadow="2xl"
             onClick={() => setOpen((v) => !v)}
+            touchAction="manipulation"
           />
 
           {unreadCount > 0 && !open && (
@@ -156,6 +146,7 @@ export default function GlobalChat() {
             overflow="hidden"
             border="2px solid #FFD700"
           >
+            {/* Header */}
             <HStack
               bgGradient="linear(to-r, yellow.400, yellow.500)"
               p={3}
@@ -175,19 +166,12 @@ export default function GlobalChat() {
               />
             </HStack>
 
-            <VStack
-              flex="1"
-              p={3}
-              spacing={2}
-              overflowY="auto"
-              align="stretch"
-            >
+            {/* Messages */}
+            <VStack flex="1" p={3} spacing={2} overflowY="auto" align="stretch">
               {messages.map((msg) => (
                 <HStack
                   key={msg.id}
-                  justify={
-                    msg.sender === "user" ? "flex-end" : "flex-start"
-                  }
+                  justify={msg.sender === "user" ? "flex-end" : "flex-start"}
                 >
                   <Box
                     bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
@@ -203,6 +187,7 @@ export default function GlobalChat() {
               <div ref={bottomRef} />
             </VStack>
 
+            {/* Input */}
             <HStack p={3} borderTop="1px solid #eee">
               <Input
                 placeholder="Type a message..."
@@ -210,7 +195,7 @@ export default function GlobalChat() {
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
-              <Button colorScheme="yellow" onClick={sendMessage}>
+              <Button colorScheme="yellow" minH="44px" onClick={sendMessage}>
                 Send
               </Button>
             </HStack>
