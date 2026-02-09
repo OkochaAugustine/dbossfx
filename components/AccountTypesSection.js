@@ -6,7 +6,6 @@ import {
   Text,
   SimpleGrid,
   Stack,
-  Button,
   Badge,
 } from "@chakra-ui/react";
 import { motion } from "framer-motion";
@@ -20,8 +19,7 @@ const accounts = [
     spread: "From 1.2 pips",
     leverage: "Up to 1:500",
     deposit: "$100",
-    demoUrl: "/demo-account/standard",
-    liveUrl: "/open-account/standard",
+    highlight: false,
   },
   {
     name: "Pro",
@@ -29,8 +27,6 @@ const accounts = [
     spread: "From 0.6 pips",
     leverage: "Up to 1:500",
     deposit: "$500",
-    demoUrl: "/demo-account/pro",
-    liveUrl: "/open-account/pro",
     highlight: true,
   },
   {
@@ -39,14 +35,13 @@ const accounts = [
     spread: "From 0.0 pips",
     leverage: "Up to 1:500",
     deposit: "$1,000",
-    demoUrl: "/demo-account/raw",
-    liveUrl: "/open-account/raw",
+    highlight: false,
   },
 ];
 
 export default function AccountTypesSection() {
   return (
-    <Box bg="white" py={{ base: 20, md: 28 }} px={{ base: 4, md: 12 }}>
+    <Box bg="gray.50" py={{ base: 20, md: 28 }} px={{ base: 4, md: 12 }}>
       <Stack maxW="1400px" mx="auto" spacing={{ base: 12, md: 16 }}>
         
         {/* HEADER */}
@@ -60,80 +55,53 @@ export default function AccountTypesSection() {
           </Heading>
 
           <Text fontSize={{ base: "md", md: "lg" }} color="gray.600">
-            Flexible account options designed for every level of trader —
-            from beginners to professionals.
+            Flexible account options designed for every level of trader — from beginners to professionals. 
+            Explore the features, spreads, leverage, and minimum deposits to find the account that suits your strategy.
           </Text>
         </Stack>
 
-        {/* ACCOUNT GRID (DESKTOP VIEW ON MOBILE TOO) */}
-        <SimpleGrid
-          columns={{ base: 3, md: 3 }}
-          spacing={{ base: 4, md: 8 }}
-        >
+        {/* PINTEREST-STYLE GRID */}
+        <SimpleGrid columns={{ base: 1, sm: 2, md: 3 }} spacing={8}>
           {accounts.map((account, i) => (
             <MotionBox
               key={i}
               border="1px solid"
               borderColor={account.highlight ? "yellow.400" : "gray.200"}
               rounded="2xl"
-              p={{ base: 4, md: 8 }}
-              textAlign="center"
+              p={{ base: 6, md: 8 }}
               bg="white"
-              shadow={{ base: "md", md: "none" }}
-              whileHover={{ y: -6 }}
+              shadow="xl"
+              whileHover={{ y: -8, shadow: "2xl" }}
               transition={{ duration: 0.3 }}
             >
               {account.highlight && (
-                <Badge mb={3} colorScheme="yellow">
+                <Badge mb={4} colorScheme="yellow">
                   Most Popular
                 </Badge>
               )}
 
-              <Heading fontSize={{ base: "md", md: "2xl" }}>
+              <Heading fontSize={{ base: "xl", md: "2xl" }} mb={2}>
                 {account.name}
               </Heading>
 
               <Text
-                fontSize={{ base: "xs", md: "md" }}
+                fontSize={{ base: "sm", md: "md" }}
                 color="gray.500"
-                mb={6}
+                mb={4}
               >
                 {account.subtitle}
               </Text>
 
-              <Stack spacing={2} mb={6}>
-                <Text fontSize={{ base: "xs", md: "md" }}>
+              <Stack spacing={2}>
+                <Text fontSize={{ base: "sm", md: "md" }}>
                   <strong>Spreads:</strong> {account.spread}
                 </Text>
-                <Text fontSize={{ base: "xs", md: "md" }}>
+                <Text fontSize={{ base: "sm", md: "md" }}>
                   <strong>Leverage:</strong> {account.leverage}
                 </Text>
-                <Text fontSize={{ base: "xs", md: "md" }}>
+                <Text fontSize={{ base: "sm", md: "md" }}>
                   <strong>Min Deposit:</strong> {account.deposit}
                 </Text>
-              </Stack>
-
-              <Stack spacing={3}>
-                <Button
-                  colorScheme="yellow"
-                  size={{ base: "sm", md: "lg" }}
-                  w="full"
-                  as="a"
-                  href={account.liveUrl}
-                >
-                  Open Live
-                </Button>
-
-                <Button
-                  variant="outline"
-                  colorScheme="yellow"
-                  size={{ base: "sm", md: "lg" }}
-                  w="full"
-                  as="a"
-                  href={account.demoUrl}
-                >
-                  Demo
-                </Button>
               </Stack>
             </MotionBox>
           ))}

@@ -25,36 +25,64 @@ import { supabase } from "@/lib/supabaseClient";
 export default function AdminDashboard() {
   const toast = useToast();
 
-  const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [accounts, setAccounts] = useState([]);
   const [savingId, setSavingId] = useState(null);
-
   const [messages, setMessages] = useState([]);
   const [replyInputs, setReplyInputs] = useState({});
 
-  // ------------------- Fetch users + accounts -------------------
+  // ------------------- AUTH FETCH -------------------
+  const authFetch = async (url, options = {}) => {
+    return fetch(url, {
+      ...options,
+      credentials: "include", // ✅ send cookies
+      headers: { "Content-Type": "application/json" },
+    });
+  };
+
+  // ------------------- VERIFY ADMIN TOKEN -------------------
+  const verifyToken = async () => {
+    try {
+      const res = await authFetch("/api/admin/verify-token");
+      const data = await res.json();
+
+      if (!res.ok || !data.valid) throw new Error("Auth failed");
+
+      // Token valid → fetch accounts
+      await fetchAccounts();
+    } catch (err) {
+      toast({
+        title: "Authentication error",
+        description: "Please login again.",
+        status: "error",
+        duration: 4000,
+      });
+      window.location.href = "/admin/login";
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ------------------- FETCH ACCOUNTS -------------------
   const fetchAccounts = async () => {
     try {
       setLoading(true);
-
-      const res = await fetch("/api/admin/getAccounts");
+      const res = await authFetch("/api/admin/getAccounts");
       const result = await res.json();
 
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to fetch users");
-      }
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to fetch accounts");
 
-      const sanitized = result.data.map((acc) => ({
-        ...acc,
-        balance: acc.balance ?? 0,
-        earned_profit: acc.earned_profit ?? 0,
-        active_deposit: acc.active_deposit ?? 0,
-      }));
-
-      setAccounts(sanitized);
+      setAccounts(
+        result.data.map((acc) => ({
+          ...acc,
+          balance: acc.balance ?? 0,
+          earned_profit: acc.earned_profit ?? 0,
+          active_deposit: acc.active_deposit ?? 0,
+        }))
+      );
     } catch (err) {
       toast({
-        title: "Error fetching users",
+        title: "Error fetching accounts",
         description: err.message,
         status: "error",
         duration: 5000,
@@ -65,26 +93,22 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
-    fetchAccounts();
+    verifyToken();
   }, []);
 
-  // ------------------- Handle input change -------------------
+  // ------------------- HANDLE INPUT CHANGE -------------------
   const handleChange = (userId, field, value) => {
     setAccounts((prev) =>
-      prev.map((acc) =>
-        acc.user_id === userId ? { ...acc, [field]: value } : acc
-      )
+      prev.map((acc) => (acc.user_id === userId ? { ...acc, [field]: value } : acc))
     );
   };
 
-  // ------------------- Save account -------------------
+  // ------------------- SAVE ACCOUNT -------------------
   const handleSave = async (account) => {
     setSavingId(account.user_id);
-
     try {
-      const res = await fetch("/api/admin/updateAccount", {
+      const res = await authFetch("/api/admin/updateAccount", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           id: account.account_id,
           balance: Number(account.balance),
@@ -94,28 +118,17 @@ export default function AdminDashboard() {
       });
 
       const result = await res.json();
-      if (!res.ok || !result.success) {
-        throw new Error(result.error || "Failed to update account");
-      }
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to update account");
 
-      toast({
-        title: "Account updated",
-        status: "success",
-        duration: 2000,
-      });
+      toast({ title: "Account updated", status: "success", duration: 2000 });
     } catch (err) {
-      toast({
-        title: "Error",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
+      toast({ title: "Error", description: err.message, status: "error", duration: 4000 });
     } finally {
       setSavingId(null);
     }
   };
 
-  // ------------------- Support messages -------------------
+  // ------------------- SUPPORT MESSAGES -------------------
   useEffect(() => {
     let mounted = true;
 
@@ -124,7 +137,6 @@ export default function AdminDashboard() {
         .from("support_messages")
         .select("*")
         .order("created_at", { ascending: true });
-
       if (mounted) setMessages(data || []);
     };
 
@@ -176,11 +188,9 @@ export default function AdminDashboard() {
 
   return (
     <Box p={[4, 6, 8]} maxW="100vw">
-      <Heading mb={6} fontSize={["xl", "2xl"]}>
-        Admin Dashboard
-      </Heading>
+      <Heading mb={6} fontSize={["xl", "2xl"]}>Admin Dashboard</Heading>
 
-      {/* -------- RESPONSIVE TABLE -------- */}
+      {/* ACCOUNTS TABLE */}
       <Box overflowX="auto" mb={10}>
         <Table size="sm" minW="900px">
           <Thead>
@@ -201,42 +211,16 @@ export default function AdminDashboard() {
                 <Td>{acc.email}</Td>
                 <Td>{acc.phone}</Td>
                 <Td>
-                  <Input
-                    size="sm"
-                    type="number"
-                    value={acc.balance}
-                    onChange={(e) =>
-                      handleChange(acc.user_id, "balance", e.target.value)
-                    }
-                  />
+                  <Input size="sm" type="number" value={acc.balance} onChange={(e) => handleChange(acc.user_id, "balance", e.target.value)} />
                 </Td>
                 <Td>
-                  <Input
-                    size="sm"
-                    type="number"
-                    value={acc.earned_profit}
-                    onChange={(e) =>
-                      handleChange(acc.user_id, "earned_profit", e.target.value)
-                    }
-                  />
+                  <Input size="sm" type="number" value={acc.earned_profit} onChange={(e) => handleChange(acc.user_id, "earned_profit", e.target.value)} />
                 </Td>
                 <Td>
-                  <Input
-                    size="sm"
-                    type="number"
-                    value={acc.active_deposit}
-                    onChange={(e) =>
-                      handleChange(acc.user_id, "active_deposit", e.target.value)
-                    }
-                  />
+                  <Input size="sm" type="number" value={acc.active_deposit} onChange={(e) => handleChange(acc.user_id, "active_deposit", e.target.value)} />
                 </Td>
                 <Td>
-                  <Button
-                    size="sm"
-                    colorScheme="yellow"
-                    isLoading={savingId === acc.user_id}
-                    onClick={() => handleSave(acc)}
-                  >
+                  <Button size="sm" colorScheme="yellow" isLoading={savingId === acc.user_id} onClick={() => handleSave(acc)}>
                     Save
                   </Button>
                 </Td>
@@ -248,63 +232,27 @@ export default function AdminDashboard() {
 
       <Divider my={6} />
 
-      {/* -------- SUPPORT CHAT -------- */}
-      <Heading size="md" mb={4}>
-        Live Support Messages
-      </Heading>
+      {/* SUPPORT CHAT */}
+      <Heading size="md" mb={4}>Live Support Messages</Heading>
 
       {Object.entries(groupedMessages).map(([userId, msgs]) => (
-        <Box
-          key={userId}
-          mb={6}
-          p={4}
-          border="1px solid"
-          borderColor="gray.200"
-          rounded="xl"
-        >
-          <Text fontWeight="bold" mb={2}>
-            User ID: {userId}
-          </Text>
-
+        <Box key={userId} mb={6} p={4} border="1px solid" borderColor="gray.200" rounded="xl">
+          <Text fontWeight="bold" mb={2}>User ID: {userId}</Text>
           <VStack align="stretch" spacing={2}>
             {msgs.map((m) => (
-              <Box
-                key={m.id}
-                p={2}
-                bg={m.sender === "user" ? "yellow.100" : "gray.200"}
-                rounded="md"
-              >
-                <Text fontSize="sm" fontWeight="bold">
-                  {m.sender}
-                </Text>
+              <Box key={m.id} p={2} bg={m.sender === "user" ? "yellow.100" : "gray.200"} rounded="md">
+                <Text fontSize="sm" fontWeight="bold">{m.sender}</Text>
                 <Text fontSize="sm">{m.message}</Text>
               </Box>
             ))}
           </VStack>
 
           <HStack mt={3} spacing={2}>
-            <Input
-              placeholder="Reply..."
-              size="sm"
-              value={replyInputs[userId] || ""}
-              onChange={(e) =>
-                setReplyInputs((p) => ({
-                  ...p,
-                  [userId]: e.target.value,
-                }))
-              }
-            />
-            <Button
-              size="sm"
-              colorScheme="yellow"
-              onClick={() => sendReply(userId)}
-            >
-              Send
-            </Button>
+            <Input placeholder="Reply..." size="sm" value={replyInputs[userId] || ""} onChange={(e) => setReplyInputs((p) => ({ ...p, [userId]: e.target.value }))} />
+            <Button size="sm" colorScheme="yellow" onClick={() => sendReply(userId)}>Send</Button>
           </HStack>
         </Box>
       ))}
     </Box>
   );
 }
-

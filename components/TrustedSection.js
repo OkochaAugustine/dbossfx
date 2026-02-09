@@ -6,18 +6,21 @@ import {
   Heading,
   Text,
   Badge,
-  Button,
   Flex,
   Image,
   VStack,
   HStack,
   Circle,
+  Button,
 } from "@chakra-ui/react";
-import { motion } from "framer-motion";
+import { motion, useAnimation } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { useEffect, useState } from "react";
 
 const MotionBox = motion(Box);
+const MotionHeading = motion(Heading);
+const MotionText = motion(Text);
+const MotionButton = motion(Button);
 
 const stats = [
   { label: "Active Traders", value: 100000 },
@@ -37,6 +40,7 @@ const traders = [
 export default function TrustedSection() {
   const [ref, inView] = useInView({ triggerOnce: true, threshold: 0.3 });
   const [counters, setCounters] = useState(stats.map(() => 0));
+  const controls = useAnimation();
 
   useEffect(() => {
     if (inView) {
@@ -61,6 +65,14 @@ export default function TrustedSection() {
       });
     }
   }, [inView]);
+
+  useEffect(() => {
+    controls.start({
+      scale: [1, 1.05, 1],
+      rotate: [0, 2, -2, 0],
+      transition: { duration: 2, repeat: Infinity, repeatType: "loop" },
+    });
+  }, [controls]);
 
   return (
     <Box position="relative" overflow="hidden" py={{ base: 20, md: 28 }}>
@@ -162,11 +174,47 @@ export default function TrustedSection() {
           </HStack>
         </Box>
 
-        {/* CTA */}
-        <Button colorScheme="yellow" size="lg" mx="auto" mt={8} as="a" href="/open-account">
-          Join Thousands of Traders
-        </Button>
+        {/* Mind-blowing CTA Button */}
+        <MotionBox mt={12} animate={controls}>
+          <MotionHeading
+            fontSize={{ base: "3xl", md: "5xl" }}
+            fontWeight="extrabold"
+            mb={6}
+            bgGradient="linear(to-l, yellow.400, whiteAlpha.900)"
+            bgClip="text"
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8 }}
+          >
+            Join Thousands of Successful Traders Today
+          </MotionHeading>
+
+          <MotionText
+            fontSize={{ base: "md", md: "2xl" }}
+            fontWeight="semibold"
+            mb={6}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 1, delay: 0.3 }}
+          >
+            Experience ultra-fast execution, secure trading, and professional-grade tools to take your trading to the next level.
+          </MotionText>
+
+          <MotionButton
+            size={{ base: "lg", md: "2xl" }}
+            colorScheme="yellow"
+            borderRadius="3xl"
+            px={12}
+            py={6}
+            fontSize={{ base: "md", md: "xl" }}
+            whileHover={{ scale: 1.1, rotate: 2 }}
+            whileTap={{ scale: 0.95, rotate: -2 }}
+          >
+            Start Trading Now
+          </MotionButton>
+        </MotionBox>
       </Stack>
     </Box>
   );
 }
+

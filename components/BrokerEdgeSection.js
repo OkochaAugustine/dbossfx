@@ -8,9 +8,17 @@ import {
   Button,
   Stack,
   Icon,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  useDisclosure,
 } from "@chakra-ui/react";
 import { CheckCircleIcon } from "@chakra-ui/icons";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 const MotionBox = motion(Box);
 
@@ -23,6 +31,14 @@ const features = [
 ];
 
 export default function BrokerEdgeSection() {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const router = useRouter();
+
+  const handleOkay = () => {
+    onClose();
+    router.push("/register"); // Navigate to existing register page
+  };
+
   return (
     <Box
       position="relative"
@@ -34,12 +50,7 @@ export default function BrokerEdgeSection() {
       bgRepeat="no-repeat"
     >
       {/* DARK OVERLAY */}
-      <Box
-        position="absolute"
-        inset={0}
-        bg="rgba(0,0,0,0.65)"
-        zIndex={0}
-      />
+      <Box position="absolute" inset={0} bg="rgba(0,0,0,0.65)" zIndex={0} />
 
       {/* CONTENT */}
       <Flex
@@ -49,7 +60,7 @@ export default function BrokerEdgeSection() {
         mx="auto"
         align="center"
         gap={{ base: 12, md: 20 }}
-        direction="row"
+        direction={{ base: "column", md: "row" }}
       >
         {/* LEFT */}
         <Stack flex="1" spacing={6} color="white">
@@ -66,6 +77,7 @@ export default function BrokerEdgeSection() {
             size="lg"
             colorScheme="yellow"
             w="fit-content"
+            onClick={onOpen} // Open modal
           >
             Open Trading Account
           </Button>
@@ -85,18 +97,41 @@ export default function BrokerEdgeSection() {
               viewport={{ once: true }}
               transition={{ duration: 0.5, delay: i * 0.1 }}
             >
-              <Icon
-                as={CheckCircleIcon}
-                boxSize={6}
-                color="yellow.400"
-              />
-              <Text fontSize={{ base: "md", md: "lg" }}>
-                {item}
-              </Text>
+              <Icon as={CheckCircleIcon} boxSize={6} color="yellow.400" />
+              <Text fontSize={{ base: "md", md: "lg" }}>{item}</Text>
             </MotionBox>
           ))}
         </Stack>
       </Flex>
+
+      {/* MODAL */}
+      <Modal isOpen={isOpen} onClose={onClose} isCentered motionPreset="scale">
+        <ModalOverlay bg="blackAlpha.700" />
+        <ModalContent
+          borderRadius="2xl"
+          overflow="hidden"
+          bgGradient="linear(to-b, gray.900, gray.800)"
+          color="white"
+          textAlign="center"
+          p={8}
+        >
+          <ModalHeader mb={4}>Thank You for Trusting DbossFX</ModalHeader>
+          <ModalBody>
+            <Text fontSize={{ base: "md", md: "lg" }} mb={6}>
+              Please register your account to start trading with confidence.
+            </Text>
+          </ModalBody>
+
+          <ModalFooter justifyContent="center" gap={4}>
+            <Button variant="outline" colorScheme="red" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button colorScheme="yellow" onClick={handleOkay}>
+              Okay
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }

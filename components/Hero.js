@@ -158,22 +158,6 @@ export default function Hero() {
                         Open Free Account
                       </MotionButton>
                     </Link>
-
-                    {/* TRY DEMO → METATRADER 5 */}
-                    <Link
-                      href="https://www.metatrader5.com"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <MotionButton
-                        variants={buttonVariants}
-                        size="lg"
-                        variant="outline"
-                        colorScheme="yellow"
-                      >
-                        Try Demo
-                      </MotionButton>
-                    </Link>
                   </Stack>
                 </>
               )}

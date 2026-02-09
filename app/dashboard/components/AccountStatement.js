@@ -25,6 +25,7 @@ export default function AccountStatement({ userId, isCompact, mobile }) {
     deposit: useRef(null),
   };
 
+  // Animations
   const glowGreen = keyframes`
     0% { background: rgba(0,255,0,0.25); }
     100% { background: transparent; }
@@ -131,16 +132,45 @@ export default function AccountStatement({ userId, isCompact, mobile }) {
       minWidth={0}
       overflow="hidden"
     >
-      <Text fontSize={mobile || isCompact ? "sm" : "md"} fontWeight="bold" minWidth={0} flexShrink={1} isTruncated>
+      <Text
+        fontSize={mobile || isCompact ? "sm" : "md"}
+        fontWeight="bold"
+        minWidth={0}
+        flexShrink={1}
+        isTruncated
+        color="yellow.400" // 💰 Balance in gold
+      >
         💰 Balance: ${displayBalance.toFixed(2)}
       </Text>
-      <Text fontSize={mobile || isCompact ? "sm" : "md"} fontWeight="bold" minWidth={0} flexShrink={1} isTruncated
-        animation={profitAnim === "up" ? `${glowGreen} 0.7s ease-out` : profitAnim === "down" ? `${glowRed} 0.7s ease-out` : "none"}
+
+      <Text
+        fontSize={mobile || isCompact ? "sm" : "md"}
+        fontWeight="bold"
+        minWidth={0}
+        flexShrink={1}
+        isTruncated
+        color="green.400" // 📈 Profit in green
+        animation={profitAnim === "up"
+          ? `${glowGreen} 0.7s ease-out`
+          : profitAnim === "down"
+          ? `${glowRed} 0.7s ease-out`
+          : "none"}
       >
         📈 Profit: ${displayProfit.toFixed(2)}
       </Text>
-      <Text fontSize={mobile || isCompact ? "sm" : "md"} fontWeight="bold" minWidth={0} flexShrink={1} isTruncated
-        animation={depositAnim === "up" ? `${glowGreen} 0.7s ease-out` : depositAnim === "down" ? `${glowRed} 0.7s ease-out` : "none"}
+
+      <Text
+        fontSize={mobile || isCompact ? "sm" : "md"}
+        fontWeight="bold"
+        minWidth={0}
+        flexShrink={1}
+        isTruncated
+        color="blue.400" // 💵 Deposit in blue
+        animation={depositAnim === "up"
+          ? `${glowGreen} 0.7s ease-out`
+          : depositAnim === "down"
+          ? `${glowRed} 0.7s ease-out`
+          : "none"}
       >
         💵 Deposit: ${displayDeposit.toFixed(2)}
       </Text>
