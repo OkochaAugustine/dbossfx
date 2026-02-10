@@ -24,7 +24,7 @@ export default function DepositPage() {
     {
       key: "btc",
       label: "BTC Wallet",
-      instructions: "Transfer from $100 to $10,000,000 to the wallet: 1DbossFXBTCWalletAddress",
+      instructions: "Transfer from $100 to $10,000,000 to the wallet: 3BtXKDbYvCvXqQEnMd7GfQCbetwmU1QPgE",
     },
     {
       key: "bank",
