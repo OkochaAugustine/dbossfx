@@ -5,12 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   Box,
   VStack,
-  HStack,
+  Stack,
   Text,
   Button,
   Radio,
   RadioGroup,
-  Stack,
   Heading,
   useToast,
 } from "@chakra-ui/react";
@@ -24,22 +23,13 @@ export default function DepositPage() {
     {
       key: "btc",
       label: "BTC Wallet",
-      instructions: "Transfer from $100 to $10,000,000 to the wallet: 3BtXKDbYvCvXqQEnMd7GfQCbetwmU1QPgE",
+      instructions:
+        "Transfer from $100 to $10,000,000 to the wallet: 3BtXKDbYvCvXqQEnMd7GfQCbetwmU1QPgE",
     },
     {
       key: "bank",
       label: "Bank Transfer",
-      instructions: "Transfer from $100 to $10,000,000 to the following bank account: DBossFX Bank Name: XYZ Bank, Account Number: 123456789, SWIFT: XYZBANK",
-    },
-    {
-      key: "card",
-      label: "Card Payment",
-      instructions: "Use your debit or credit card to deposit between $100 and $10,000,000. Follow the instructions on the payment gateway.",
-    },
-    {
-      key: "paypal",
-      label: "PayPal",
-      instructions: "Send from $100 to $10,000,000 via PayPal to: payments@dbossfx.com",
+      instructions: "Bank transfer currently unavailable.",
     },
   ];
 
@@ -101,12 +91,7 @@ export default function DepositPage() {
           <Text fontSize="md">
             {methods.find((m) => m.key === paymentMethod).instructions}
           </Text>
-          <Button
-            colorScheme="yellow"
-            mt={4}
-            size="lg"
-            onClick={handleCopy}
-          >
+          <Button colorScheme="yellow" mt={4} size="lg" onClick={handleCopy}>
             Copy/Proceed
           </Button>
         </Box>
