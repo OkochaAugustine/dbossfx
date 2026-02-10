@@ -39,7 +39,7 @@ export default function GlobalChat() {
     fetchUser();
   }, []);
 
-  // Fetch messages & subscribe to real-time updates
+  // Fetch messages & subscribe to real-time updates (user-specific)
   useEffect(() => {
     if (!userId) return;
 
@@ -54,15 +54,19 @@ export default function GlobalChat() {
 
     fetchMessages();
 
+    // ✅ Subscribe only to messages for this user
     const channel = supabase
-      .channel("support-chat")
+      .channel(`support-chat-${userId}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "support_messages" },
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "support_messages",
+          filter: `user_id=eq.${userId}`, // only messages for this user
+        },
         (payload) => {
-          if (payload.new.user_id === userId) {
-            setMessages((prev) => [...prev, payload.new]);
-          }
+          setMessages((prev) => [...prev, payload.new]);
         }
       )
       .subscribe();
@@ -88,7 +92,8 @@ export default function GlobalChat() {
     setNewMessage("");
   };
 
-  const unreadCount = messages.filter((m) => m.sender === "admin" && !open).length;
+  const unreadCount = messages.filter((m) => m.sender === "admin" && !open)
+    .length;
 
   return (
     <Box
