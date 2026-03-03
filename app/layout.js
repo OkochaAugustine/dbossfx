@@ -6,7 +6,8 @@ import { LoadingProvider } from "@/components/context/LoadingContext";
 import LoaderGate from "@/components/LoaderGate";
 import RouteListener from "@/components/RouteListener";
 import LayoutShell from "@/components/LayoutClient";
-import GlobalChat from "@/components/GlobalChat"; // ✅ imported
+import GlobalChat from "@/components/GlobalChat";
+import Script from "next/script"; // ✅ ADD THIS
 
 export default function RootLayout({ children }) {
   return (
@@ -20,13 +21,47 @@ export default function RootLayout({ children }) {
           minWidth: 0,
         }}
       >
+        {/* ✅ Google Translate Script */}
+        <Script
+          src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"
+          strategy="afterInteractive"
+        />
+
+        <Script id="google-translate-init" strategy="afterInteractive">
+          {`
+            function googleTranslateElementInit() {
+              new window.google.translate.TranslateElement(
+                {
+                  pageLanguage: 'en',
+                  includedLanguages: 'en,fr,de,es,it,pt,ar,zh-CN,ru',
+                  layout: google.translate.TranslateElement.InlineLayout.SIMPLE
+                },
+                'google_translate_element'
+              );
+            }
+          `}
+        </Script>
+
         <LoadingProvider>
           <Providers>
             <RouteListener />
             <LoaderGate />
             <LayoutShell>
+
+              {/* ✅ Translator Dropdown */}
+              <div
+                style={{
+                  position: "fixed",
+                  top: "10px",
+                  right: "20px",
+                  zIndex: 9999,
+                }}
+              >
+                <div id="google_translate_element"></div>
+              </div>
+
               {children}
-              <GlobalChat /> {/* ✅ chat appears globally */}
+              <GlobalChat />
             </LayoutShell>
           </Providers>
         </LoadingProvider>
@@ -34,4 +69,3 @@ export default function RootLayout({ children }) {
     </html>
   );
 }
-

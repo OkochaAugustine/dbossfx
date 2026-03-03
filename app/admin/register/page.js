@@ -1,152 +1,79 @@
-"use client";
+export const runtime = "nodejs";
 
-import { useState } from "react";
-import {
-  Box,
-  Stack,
-  Heading,
-  Text,
-  Input,
-  Button,
-  VStack,
-  FormControl,
-  FormLabel,
-  InputGroup,
-  InputRightElement,
-  useToast,
-  Spinner,
-  Center,
-} from "@chakra-ui/react";
-import { useRouter } from "next/navigation";
+import { getSupabaseServer } from "@/lib/supabaseServer";
 
-export default function AdminRegister() {
-  const router = useRouter();
-  const toast = useToast();
-  const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "" });
+export async function POST(req) {
+  try {
+    const { fullName, email, phone, password } = await req.json();
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!form.email || !form.password) {
-      toast({ title: "Please fill all fields", status: "error", duration: 3000 });
-      return;
+    // ✅ Validate required fields
+    if (!fullName || !email || !password || !phone) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
 
-    setLoading(true);
+    const supabase = getSupabaseServer();
 
-    try {
-      const res = await fetch("/api/admin-auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
+    // 1️⃣ Create Auth user
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/verify-email`,
+      },
+    });
 
-      const data = await res.json();
-
-      if (!res.ok) throw new Error(data.error || "Registration failed");
-
-      toast({
-        title: "Admin registered successfully!",
-        description: "You can now login",
-        status: "success",
-        duration: 3000,
-      });
-
-      router.push("/admin/login"); // redirect AFTER successful registration
-    } catch (err) {
-      toast({
-        title: "Error",
-        description: err.message,
-        status: "error",
-        duration: 4000,
-      });
-    } finally {
-      setLoading(false);
+    if (authError || !authData.user) {
+      return new Response(
+        JSON.stringify({ error: "Auth creation failed: " + (authError?.message || "No user returned") }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
     }
-  };
 
-  if (loading) {
-    return (
-      <Center bg="gray.900" minH="100vh">
-        <VStack spacing={4}>
-          <Spinner size="xl" color="yellow.400" />
-          <Text fontSize="lg" fontWeight="bold" color="white">
-            Registering...
-          </Text>
-        </VStack>
-      </Center>
+    const userId = authData.user.id;
+
+    // 2️⃣ Insert into public.users
+    const { error: profileError } = await supabase
+      .from("users")
+      .insert({ id: userId, full_name: fullName, email, phone });
+
+    if (profileError) {
+      // Rollback Auth user if DB insert fails
+      await supabase.auth.admin.deleteUser(userId);
+      return new Response(
+        JSON.stringify({ error: "Profile insert failed: " + profileError.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3️⃣ Insert into account_statements
+    const { error: accountError } = await supabase
+      .from("account_statements")
+      .insert({ user_id: userId, balance: 0, earned_profit: 0, active_deposit: 0 });
+
+    if (accountError) {
+      // Rollback both Auth and user profile
+      await supabase.from("users").delete().eq("id", userId);
+      await supabase.auth.admin.deleteUser(userId);
+      return new Response(
+        JSON.stringify({ error: "Account creation failed: " + accountError.message }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // ✅ Success response
+    return new Response(
+      JSON.stringify({ message: "Registration successful", user: { id: userId, email } }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
+
+  } catch (err) {
+    console.error("Registration Error:", err);
+    return new Response(
+      JSON.stringify({ error: "Server error: " + (err?.message || err) }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
-
-  return (
-    <Box bg="gray.900" minH="100vh" py={16}>
-      <Stack maxW="400px" mx="auto" spacing={8} bg="gray.800" p={10} rounded="2xl" shadow="xl">
-        <Heading textAlign="center" color="white">
-          Admin Register
-        </Heading>
-
-        <form onSubmit={handleSubmit}>
-          <VStack spacing={4}>
-            <FormControl isRequired>
-              <FormLabel color="white">Email Address</FormLabel>
-              <Input
-                placeholder="admin@example.com"
-                type="email"
-                name="email"
-                value={form.email}
-                onChange={handleChange}
-                bg="gray.700"
-                color="white"
-              />
-            </FormControl>
-
-            <FormControl isRequired>
-              <FormLabel color="white">Password</FormLabel>
-              <InputGroup>
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter password"
-                  name="password"
-                  value={form.password}
-                  onChange={handleChange}
-                  bg="gray.700"
-                  color="white"
-                />
-                <InputRightElement width="4.5rem">
-                  <Button h="1.75rem" size="sm" onClick={() => setShowPassword(!showPassword)}>
-                    {showPassword ? "Hide" : "Show"}
-                  </Button>
-                </InputRightElement>
-              </InputGroup>
-            </FormControl>
-
-            <Button colorScheme="yellow" w="full" type="submit">
-              Register
-            </Button>
-
-            <Text textAlign="center" color="gray.300">
-              Already have an account?{" "}
-              <Box
-                as="span"
-                color="red.400"
-                fontWeight="bold"
-                cursor="pointer"
-                _hover={{ textDecoration: "underline" }}
-                onClick={() => router.push("/admin/login")}
-              >
-                Login
-              </Box>
-            </Text>
-          </VStack>
-        </form>
-      </Stack>
-    </Box>
-  );
 }
