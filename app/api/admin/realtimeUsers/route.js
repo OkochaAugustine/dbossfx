@@ -1,5 +1,10 @@
-import { createClient } from '@supabase/supabase-js';
+// app/api/admin/realtimeUsers/route.js
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
+import { createClient } from "@supabase/supabase-js";
+
+// ✅ Create Supabase client with service role
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -10,24 +15,47 @@ export async function GET(req) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Keep-alive ping every 15s
+      // 🔥 Keep-alive ping every 15 seconds
       const keepAlive = setInterval(() => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepAlive: true })}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ keepAlive: true })}\n\n`)
+        );
       }, 15000);
 
-      // Subscribe to INSERT events on users table
+      // 🔥 Subscribe to INSERT events on the users table
       const channel = supabase
-        .channel('public:users')
+        .channel("public:users")
         .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'users' },
-          (payload) => {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify(payload.new)}\n\n`));
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "users" },
+          async (payload) => {
+            try {
+              // Fetch linked account_statement for the new user
+              const { data: account, error: accountError } = await supabase
+                .from("account_statements")
+                .select("*")
+                .eq("user_id", payload.new.id)
+                .single();
+
+              if (accountError) {
+                console.error("Account fetch error:", accountError);
+              }
+
+              // Send user + account info to dashboard
+              controller.enqueue(
+                encoder.encode(
+                  `data: ${JSON.stringify({ ...payload.new, account })}\n\n`
+                )
+              );
+            } catch (err) {
+              console.error("Realtime user error:", err);
+            }
           }
         )
         .subscribe();
 
-      req.signal.addEventListener('abort', () => {
+      // 🔥 Cleanup on client disconnect
+      req.signal.addEventListener("abort", () => {
         clearInterval(keepAlive);
         supabase.removeChannel(channel);
         controller.close();
@@ -37,9 +65,9 @@ export async function GET(req) {
 
   return new Response(stream, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      Connection: 'keep-alive',
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
     },
   });
 }

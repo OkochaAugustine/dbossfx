@@ -1,79 +1,119 @@
-export const runtime = "nodejs";
+// app/admin/register/page.js
+// @ts-nocheck
+"use client";
 
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { useState } from "react";
+import { useToast, Button, Input, FormControl, FormLabel, VStack, Box, Heading, Text } from "@chakra-ui/react";
 
-export async function POST(req) {
-  try {
-    const { fullName, email, phone, password } = await req.json();
+export default function RegisterPage() {
+  const [form, setForm] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    password: "",
+    confirmPassword: "",
+  });
+  const [loading, setLoading] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const toast = useToast();
 
-    // ✅ Validate required fields
-    if (!fullName || !email || !password || !phone) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+  const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const validatePhone = (phone) => /^\d{7,15}$/.test(phone);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // ✅ Basic validation
+    if (!form.fullName || !form.email || !form.phone || !form.password || !form.confirmPassword) {
+      toast({ title: "Error", description: "Please fill all fields", status: "error" });
+      return;
+    }
+    if (!validateEmail(form.email)) {
+      toast({ title: "Error", description: "Invalid email format", status: "error" });
+      return;
+    }
+    if (!validatePhone(form.phone)) {
+      toast({ title: "Error", description: "Invalid phone number", status: "error" });
+      return;
+    }
+    if (form.password !== form.confirmPassword) {
+      toast({ title: "Error", description: "Passwords do not match", status: "error" });
+      return;
     }
 
-    const supabase = getSupabaseServer();
+    setLoading(true);
 
-    // 1️⃣ Create Auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/verify-email`,
-      },
-    });
+    try {
+      const res = await fetch("/api/admin/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
 
-    if (authError || !authData.user) {
-      return new Response(
-        JSON.stringify({ error: "Auth creation failed: " + (authError?.message || "No user returned") }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Registration failed");
+
+      setEmailSent(true);
+      toast({
+        title: "Success",
+        description: "✅ Check your email for the confirmation link",
+        status: "success",
+        duration: 5000,
+      });
+
+      setForm({ fullName: "", email: "", phone: "", password: "", confirmPassword: "" });
+    } catch (err) {
+      toast({ title: "Error", description: err.message, status: "error" });
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const userId = authData.user.id;
+  return (
+    <Box py={16} bg="gray.50" minH="100vh">
+      <Box maxW="500px" mx="auto" bg="white" p={10} rounded="2xl" shadow="xl">
+        <Heading textAlign="center" mb={4}>Create Account</Heading>
+        {!emailSent ? (
+          <form onSubmit={handleSubmit}>
+            <VStack spacing={4}>
+              <FormControl isRequired>
+                <FormLabel>Full Name</FormLabel>
+                <Input name="fullName" value={form.fullName} onChange={handleChange} />
+              </FormControl>
 
-    // 2️⃣ Insert into public.users
-    const { error: profileError } = await supabase
-      .from("users")
-      .insert({ id: userId, full_name: fullName, email, phone });
+              <FormControl isRequired>
+                <FormLabel>Email</FormLabel>
+                <Input name="email" type="email" value={form.email} onChange={handleChange} />
+              </FormControl>
 
-    if (profileError) {
-      // Rollback Auth user if DB insert fails
-      await supabase.auth.admin.deleteUser(userId);
-      return new Response(
-        JSON.stringify({ error: "Profile insert failed: " + profileError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+              <FormControl isRequired>
+                <FormLabel>Phone</FormLabel>
+                <Input name="phone" type="tel" value={form.phone} onChange={handleChange} />
+              </FormControl>
 
-    // 3️⃣ Insert into account_statements
-    const { error: accountError } = await supabase
-      .from("account_statements")
-      .insert({ user_id: userId, balance: 0, earned_profit: 0, active_deposit: 0 });
+              <FormControl isRequired>
+                <FormLabel>Password</FormLabel>
+                <Input name="password" type="password" value={form.password} onChange={handleChange} />
+              </FormControl>
 
-    if (accountError) {
-      // Rollback both Auth and user profile
-      await supabase.from("users").delete().eq("id", userId);
-      await supabase.auth.admin.deleteUser(userId);
-      return new Response(
-        JSON.stringify({ error: "Account creation failed: " + accountError.message }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
+              <FormControl isRequired>
+                <FormLabel>Confirm Password</FormLabel>
+                <Input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} />
+              </FormControl>
 
-    // ✅ Success response
-    return new Response(
-      JSON.stringify({ message: "Registration successful", user: { id: userId, email } }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
-
-  } catch (err) {
-    console.error("Registration Error:", err);
-    return new Response(
-      JSON.stringify({ error: "Server error: " + (err?.message || err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
-  }
+              <Button colorScheme="yellow" w="full" type="submit" isLoading={loading}>
+                Register
+              </Button>
+            </VStack>
+          </form>
+        ) : (
+          <Text textAlign="center" color="green.600" fontWeight="bold">
+            ✅ Check your email for the confirmation link
+          </Text>
+        )}
+      </Box>
+    </Box>
+  );
 }

@@ -1,10 +1,11 @@
 import { getSupabaseServer } from "@/lib/supabaseServer";
+
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
+export const dynamic = "force-dynamic";
 export async function POST(req) {
   console.log("🔥 POST /api/admin/createAccount called");
 

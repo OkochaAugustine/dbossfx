@@ -55,7 +55,6 @@ export default function Navbar() {
     }, 50);
   };
 
-  // Updated NavLink: closes mobile menu automatically when clicked
   const NavLink = ({ href, children }) => (
     <ChakraLink
       px={3}
@@ -65,7 +64,7 @@ export default function Navbar() {
       color="white"
       _hover={{ bg: "rgba(255,255,255,0.15)", textDecoration: "none" }}
       onClick={() => {
-        if (isOpen) onClose(); // ✅ close mobile menu immediately
+        if (isOpen) onClose();
         go(href);
       }}
     >
@@ -73,30 +72,31 @@ export default function Navbar() {
     </ChakraLink>
   );
 
+  // Initialize Google Translate after mount
   useEffect(() => {
-    let mounted = true;
-
-    const fetchMarket = async () => {
-      try {
-        const res = await fetch("/api/market", { cache: "no-store" });
-        const data = await res.json();
-        if (mounted && Array.isArray(data) && data.length > 0) setAssets(data);
-      } catch (err) {
-        console.error("Market API error:", err);
+    const addGoogleTranslate = () => {
+      if (window.google && window.google.translate) {
+        new window.google.translate.TranslateElement(
+          {
+            pageLanguage: "en",
+            includedLanguages: "en,fr,de,es,it,pt,ar,zh-CN,ru",
+            layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
+          },
+          "google_translate_element"
+        );
       }
     };
 
-    fetchMarket();
-    const interval = setInterval(fetchMarket, 3000);
+    // Retry a few times in case Google script hasn't loaded yet
+    const interval = setInterval(() => {
+      if (document.getElementById("google_translate_element") && window.google) {
+        addGoogleTranslate();
+        clearInterval(interval);
+      }
+    }, 500);
 
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, []);
-
-  const assetsDuration = useMemo(() => `${Math.max(20, assets.length * 2)}s`, [assets.length]);
-  const newsDuration = useMemo(() => `${Math.max(20, news.length * 2)}s`, [news.length]);
 
   return (
     <Box position="sticky" top="0" zIndex="1000">
@@ -114,17 +114,18 @@ export default function Navbar() {
           </Box>
 
           {/* Desktop Links */}
-          <HStack spacing={6} display={{ base: "none", md: "flex" }}>
+          <HStack spacing={4} display={{ base: "none", md: "flex" }} align="center">
             <NavLink href="/">Home</NavLink>
             <NavLink href="/markets">Markets</NavLink>
             <NavLink href="/platforms">Platforms</NavLink>
             <NavLink href="/about">About</NavLink>
             <NavLink href="/contact">Contact</NavLink>
-            <Button
-              colorScheme="yellow"
-              onClick={() => go("/login")}
-              size="sm"
-            >
+
+            {/* Google Translate Dropdown */}
+            <Box id="google_translate_element" h="40px" />
+
+            {/* Login Button */}
+            <Button colorScheme="yellow" onClick={() => go("/login")} size="sm">
               Login
             </Button>
           </HStack>
@@ -142,27 +143,17 @@ export default function Navbar() {
 
         {/* Assets ticker */}
         <Box bg="gray.900" overflow="hidden" py={2}>
-          <Flex w="max-content" animation={`ticker ${assetsDuration} linear infinite`}>
+          <Flex w="max-content" animation={`ticker ${Math.max(20, assets.length * 2)}s linear infinite`}>
             <Flex gap={10} whiteSpace="nowrap">
               {assets.map((a, i) => (
-                <Text
-                  key={`a-${i}`}
-                  fontSize="sm"
-                  fontWeight="bold"
-                  color={a.up ? "green.300" : "red.300"}
-                >
+                <Text key={`a-${i}`} fontSize="sm" fontWeight="bold" color={a.up ? "green.300" : "red.300"}>
                   {a.symbol} {a.price} {a.up ? "▲" : "▼"}
                 </Text>
               ))}
             </Flex>
             <Flex gap={10} whiteSpace="nowrap">
               {assets.map((a, i) => (
-                <Text
-                  key={`b-${i}`}
-                  fontSize="sm"
-                  fontWeight="bold"
-                  color={a.up ? "green.300" : "red.300"}
-                >
+                <Text key={`b-${i}`} fontSize="sm" fontWeight="bold" color={a.up ? "green.300" : "red.300"}>
                   {a.symbol} {a.price} {a.up ? "▲" : "▼"}
                 </Text>
               ))}
@@ -172,7 +163,7 @@ export default function Navbar() {
 
         {/* News ticker */}
         <Box bg="gray.800" overflow="hidden" py={2}>
-          <Flex w="max-content" animation={`ticker ${newsDuration} linear infinite`}>
+          <Flex w="max-content" animation={`ticker ${Math.max(20, news.length * 2)}s linear infinite`}>
             <Flex gap={10} whiteSpace="nowrap">
               {news.map((n, i) => (
                 <Text key={`n-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
@@ -200,14 +191,7 @@ export default function Navbar() {
             <NavLink href="/platforms">Platforms</NavLink>
             <NavLink href="/about">About</NavLink>
             <NavLink href="/contact">Contact</NavLink>
-            <Button
-              colorScheme="yellow"
-              onClick={() => {
-                onClose(); // ✅ close mobile menu immediately
-                go("/login");
-              }}
-              w="full"
-            >
+            <Button colorScheme="yellow" onClick={() => { onClose(); go("/login"); }} w="full">
               Login
             </Button>
           </Stack>

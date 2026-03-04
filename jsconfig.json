@@ -3,6 +3,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"]
-    }
-  }
+    },
+    "allowJs": true,   // ✅ allow JS files
+    "checkJs": false   // ✅ disable type-checking for JS
+  },
+  "exclude": ["node_modules", ".next"] // ✅ ignore cache and modules
 }

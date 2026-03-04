@@ -1,42 +1,17 @@
 // /api/admin/getAccounts/route.js
 import { getSupabaseServer } from "@/lib/supabaseServer";
-
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req) {
   console.log("🔥 GET /api/admin/getAccounts called");
 
   try {
-    // 1️⃣ Check env variables
-    console.log("SUPABASE_URL exists:", !!process.env.SUPABASE_URL);
-    console.log("SUPABASE_SERVICE_ROLE_KEY exists:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
-
-    // 2️⃣ Create supabase client
     const supabase = getSupabaseServer();
+    if (!supabase) throw new Error("Supabase client not initialized");
 
-    if (!supabase) {
-      console.log("❌ Supabase client is undefined");
-      throw new Error("Supabase server client not initialized");
-    }
-
-    console.log("✅ Supabase client created");
-
-    // 3️⃣ Test simple query first
-    console.log("📡 Testing basic users query...");
-    const { data: testUsers, error: usersError } = await supabase
-      .from("users")
-      .select("*")
-      .limit(5);
-
-    if (usersError) {
-      console.log("❌ Users query failed:", usersError);
-      throw usersError;
-    }
-    console.log("✅ Basic users query works");
-
-    // 4️⃣ Now relational query
-    console.log("📡 Testing relational query with account_statements...");
-    const { data, error } = await supabase
+    // Fetch all users with account statements
+    const { data: users, error: usersError } = await supabase
       .from("users")
       .select(`
         id,
@@ -52,54 +27,72 @@ export async function GET(req) {
         )
       `);
 
-    if (error) {
-      console.log("❌ Relational query failed:", error);
-      throw error;
+    if (usersError) throw usersError;
+
+    // Ensure each user has at least one account statement
+    for (const user of users) {
+      if (!user.account_statements || user.account_statements.length === 0) {
+        console.log(`ℹ Creating default account for user ${user.id}`);
+        const { data: newAccount, error: insertError } = await supabase
+          .from("account_statements")
+          .insert({
+            user_id: user.id,
+            balance: 0,
+            earned_profit: 0,
+            active_deposit: 0,
+            created_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error(`❌ Failed to create account for user ${user.id}:`, insertError);
+          // Make a temporary default object to avoid null crash
+          user.account_statements = [{
+            id: null,
+            balance: 0,
+            earned_profit: 0,
+            active_deposit: 0
+          }];
+          continue;
+        }
+
+        user.account_statements = [newAccount];
+      }
     }
 
-    console.log("✅ Relational query success");
-    console.log("Returned rows:", data?.length);
-
-    // 5️⃣ Format data so frontend can safely use .map()
-    const formatted = (data || []).map((user) => {
-      const account = user.account_statements?.[0];
+    // Format data safely
+    const formatted = users.map((user) => {
+      const account = user.account_statements?.[0] || {
+        id: null,
+        balance: 0,
+        earned_profit: 0,
+        active_deposit: 0
+      };
 
       return {
         user_id: user.id,
         full_name: user.full_name,
         email: user.email,
         phone: user.phone,
-        account_id: account?.id || null,
-        balance: account?.balance ?? 0,
-        earned_profit: account?.earned_profit ?? 0,
-        active_deposit: account?.active_deposit ?? 0,
+        account_id: account.id,
+        balance: account.balance,
+        earned_profit: account.earned_profit,
+        active_deposit: account.active_deposit,
       };
     });
 
     console.log("✅ Data formatted successfully");
-
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: formatted, // 🔥 MUST be called "data" for AdminDashboard
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: true, data: formatted }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
+
   } catch (err) {
     console.error("🚨 FINAL ERROR:", err);
-
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: err.message,
-      }),
-      {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: false, error: err.message }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }

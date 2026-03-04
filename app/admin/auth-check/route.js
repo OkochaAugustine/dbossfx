@@ -1,4 +1,5 @@
 // app/api/admin/verify-token/route.js
+export const dynamic = "force-dynamic";
 import jwt from "jsonwebtoken";
 import { NextResponse } from "next/server";
 

@@ -1,6 +1,6 @@
 // Force Node runtime
 export const runtime = "nodejs";
-
+export const dynamic = "force-dynamic";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 
 export async function POST(req) {
