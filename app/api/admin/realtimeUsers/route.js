@@ -1,10 +1,8 @@
-// app/api/admin/realtimeUsers/route.js
-export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { createClient } from "@supabase/supabase-js";
 
-// ✅ Create Supabase client with service role
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -15,14 +13,12 @@ export async function GET(req) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // 🔥 Keep-alive ping every 15 seconds
       const keepAlive = setInterval(() => {
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ keepAlive: true })}\n\n`)
         );
       }, 15000);
 
-      // 🔥 Subscribe to INSERT events on the users table
       const channel = supabase
         .channel("public:users")
         .on(
@@ -30,22 +26,29 @@ export async function GET(req) {
           { event: "INSERT", schema: "public", table: "users" },
           async (payload) => {
             try {
-              // Fetch linked account_statement for the new user
-              const { data: account, error: accountError } = await supabase
+              let { data: account } = await supabase
                 .from("account_statements")
                 .select("*")
                 .eq("user_id", payload.new.id)
-                .single();
+                .maybeSingle();
 
-              if (accountError) {
-                console.error("Account fetch error:", accountError);
+              if (!account) {
+                const { data: newAccount } = await supabase
+                  .from("account_statements")
+                  .insert({
+                    user_id: payload.new.id,
+                    balance: 0,
+                    earned_profit: 0,
+                    active_deposit: 0,
+                    created_at: new Date().toISOString(),
+                  })
+                  .select()
+                  .single();
+                account = newAccount;
               }
 
-              // Send user + account info to dashboard
               controller.enqueue(
-                encoder.encode(
-                  `data: ${JSON.stringify({ ...payload.new, account })}\n\n`
-                )
+                encoder.encode(`data: ${JSON.stringify({ ...payload.new, account })}\n\n`)
               );
             } catch (err) {
               console.error("Realtime user error:", err);
@@ -54,7 +57,6 @@ export async function GET(req) {
         )
         .subscribe();
 
-      // 🔥 Cleanup on client disconnect
       req.signal.addEventListener("abort", () => {
         clearInterval(keepAlive);
         supabase.removeChannel(channel);

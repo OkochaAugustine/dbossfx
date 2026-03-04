@@ -1,39 +1,38 @@
-// /api/admin/getAccounts/route.js
-import { getSupabaseServer } from "@/lib/supabaseServer";
+// app/api/admin/getAccounts/route.js
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+import { getSupabaseServer } from "@/lib/supabaseServer";
+
 export async function GET(req) {
-  console.log("🔥 GET /api/admin/getAccounts called");
+  const supabase = getSupabaseServer();
 
   try {
-    const supabase = getSupabaseServer();
-    if (!supabase) throw new Error("Supabase client not initialized");
+    console.log("🔥 GET /api/admin/getAccounts called");
 
-    // Fetch all users with account statements
+    // 1️⃣ Fetch all users
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select(`
-        id,
-        full_name,
-        email,
-        phone,
-        created_at,
-        account_statements (
-          id,
-          balance,
-          earned_profit,
-          active_deposit
-        )
-      `);
+      .select("*");
 
     if (usersError) throw usersError;
 
-    // Ensure each user has at least one account statement
+    const accountsData = [];
+
+    // 2️⃣ Loop through users and ensure they have an account
     for (const user of users) {
-      if (!user.account_statements || user.account_statements.length === 0) {
-        console.log(`ℹ Creating default account for user ${user.id}`);
-        const { data: newAccount, error: insertError } = await supabase
+      // Check if the account already exists
+      const { data: account, error: accountError } = await supabase
+        .from("account_statements")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      let finalAccount = account;
+
+      if (accountError && accountError.code === "PGRST116") {
+        // Account not found, create default
+        const { data: newAccount, error: createError } = await supabase
           .from("account_statements")
           .insert({
             user_id: user.id,
@@ -45,53 +44,39 @@ export async function GET(req) {
           .select()
           .single();
 
-        if (insertError) {
-          console.error(`❌ Failed to create account for user ${user.id}:`, insertError);
-          // Make a temporary default object to avoid null crash
-          user.account_statements = [{
-            id: null,
-            balance: 0,
-            earned_profit: 0,
-            active_deposit: 0
-          }];
-          continue;
+        if (createError) {
+          console.error("❌ Failed to create default account:", createError);
+          continue; // skip this user
         }
 
-        user.account_statements = [newAccount];
+        finalAccount = newAccount;
+        console.log("ℹ Created default account for user", user.id);
+      } else if (accountError) {
+        console.error("❌ Failed to fetch account for user", user.id, accountError);
+        continue; // skip this user
       }
-    }
 
-    // Format data safely
-    const formatted = users.map((user) => {
-      const account = user.account_statements?.[0] || {
-        id: null,
-        balance: 0,
-        earned_profit: 0,
-        active_deposit: 0
-      };
-
-      return {
+      accountsData.push({
         user_id: user.id,
         full_name: user.full_name,
         email: user.email,
         phone: user.phone,
-        account_id: account.id,
-        balance: account.balance,
-        earned_profit: account.earned_profit,
-        active_deposit: account.active_deposit,
-      };
-    });
+        account_id: finalAccount.id,
+        balance: finalAccount.balance,
+        earned_profit: finalAccount.earned_profit,
+        active_deposit: finalAccount.active_deposit,
+      });
+    }
 
-    console.log("✅ Data formatted successfully");
+    // ✅ Success response
     return new Response(
-      JSON.stringify({ success: true, data: formatted }),
+      JSON.stringify({ success: true, data: accountsData }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
-
   } catch (err) {
-    console.error("🚨 FINAL ERROR:", err);
+    console.error("🚨 Error fetching accounts", err);
     return new Response(
-      JSON.stringify({ success: false, error: err.message }),
+      JSON.stringify({ success: false, error: err.message || err }),
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
