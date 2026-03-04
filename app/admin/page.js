@@ -47,6 +47,7 @@ export default function AdminDashboard() {
       const res = await authFetch("/api/admin/verify-token");
       const data = await res.json();
       if (!res.ok || !data.valid) throw new Error("Auth failed");
+
       await fetchAccounts();
     } catch (err) {
       toast({
@@ -67,15 +68,12 @@ export default function AdminDashboard() {
   // ------------------- FETCH ACCOUNTS -------------------
   const fetchAccounts = async () => {
     try {
-      console.log("📡 Fetching accounts...");
       const res = await authFetch("/api/admin/getAccounts");
       const result = await res.json();
-      console.log("📨 getAccounts response:", result);
 
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to fetch accounts");
 
-      // ✅ Use result.data, format properly
       setAccounts(
         result.data.map((acc) => ({
           user_id: acc.user_id,
@@ -89,7 +87,6 @@ export default function AdminDashboard() {
         }))
       );
     } catch (err) {
-      console.error("🚨 Error fetching accounts:", err);
       toast({
         title: "Error fetching accounts",
         description: err.message,
@@ -98,15 +95,15 @@ export default function AdminDashboard() {
     }
   };
 
-  // ------------------- REALTIME USER INSERT -------------------
+  // ------------------- REALTIME USERS -------------------
   useEffect(() => {
     const channel = supabase
       .channel("admin-users-realtime")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "users" },
+        { event: "*", schema: "public", table: "users" },
         async () => {
-          console.log("🆕 New user inserted, refetching accounts...");
+          console.log("🔄 Users table changed → refetching...");
           await fetchAccounts();
         }
       )
@@ -123,6 +120,7 @@ export default function AdminDashboard() {
 
     try {
       const isNew = !account.account_id;
+
       const url = isNew
         ? "/api/admin/createAccount"
         : "/api/admin/updateAccount";
@@ -141,15 +139,12 @@ export default function AdminDashboard() {
             active_deposit: Number(account.active_deposit),
           };
 
-      console.log("💾 Saving account:", bodyData);
-
       const res = await authFetch(url, {
         method: "POST",
         body: JSON.stringify(bodyData),
       });
 
       const result = await res.json();
-      console.log("📨 Save account response:", result);
 
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to save account");
@@ -158,8 +153,9 @@ export default function AdminDashboard() {
         title: `Account ${isNew ? "created" : "updated"}`,
         status: "success",
       });
+
+      await fetchAccounts(); // ✅ Ensure UI sync
     } catch (err) {
-      console.error("🚨 Save account error:", err);
       toast({
         title: "Error",
         description: err.message,
@@ -172,10 +168,8 @@ export default function AdminDashboard() {
 
   // ------------------- DELETE USER -------------------
   const handleDeleteUser = async (userId) => {
-    const confirmDelete = confirm(
-      "Are you sure you want to permanently delete this user?"
-    );
-    if (!confirmDelete) return;
+    if (!confirm("Are you sure you want to permanently delete this user?"))
+      return;
 
     setDeletingId(userId);
 
@@ -186,20 +180,17 @@ export default function AdminDashboard() {
       });
 
       const result = await res.json();
+
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to delete user");
-
-      console.log("🗑️ User deleted:", userId);
-
-      setAccounts((prev) => prev.filter((a) => a.user_id !== userId));
-      setMessages((prev) => prev.filter((m) => m.user_id !== userId));
 
       toast({
         title: "User deleted successfully",
         status: "success",
       });
+
+      await fetchAccounts(); // ✅ Clean refresh
     } catch (err) {
-      console.error("🚨 Delete user error:", err);
       toast({
         title: "Delete failed",
         description: err.message,
@@ -210,28 +201,17 @@ export default function AdminDashboard() {
     }
   };
 
-  // ------------------- SUPPORT -------------------
+  // ------------------- SUPPORT CHAT -------------------
   useEffect(() => {
     let mounted = true;
 
     const loadMessages = async () => {
-      try {
-        console.log("📡 Fetching support messages...");
-        const { data, error } = await supabase
-          .from("support_messages")
-          .select("*")
-          .order("created_at", { ascending: true });
+      const { data, error } = await supabase
+        .from("support_messages")
+        .select("*")
+        .order("created_at", { ascending: true });
 
-        if (error) {
-          console.error("❌ Fetch support_messages failed:", error);
-          return;
-        }
-
-        console.log("✅ Loaded messages:", data.length);
-        if (mounted) setMessages(data || []);
-      } catch (err) {
-        console.error("🚨 Error fetching support_messages:", err);
-      }
+      if (!error && mounted) setMessages(data || []);
     };
 
     loadMessages();
@@ -240,10 +220,13 @@ export default function AdminDashboard() {
       .channel("support-admin")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "support_messages" },
+        { event: "*", schema: "public", table: "support_messages" },
         (payload) => {
-          console.log("📨 New support message received:", payload.new);
-          if (mounted) setMessages((prev) => [...prev, payload.new]);
+          if (!mounted) return;
+
+          if (payload.eventType === "INSERT") {
+            setMessages((prev) => [...prev, payload.new]);
+          }
         }
       )
       .subscribe();
@@ -258,24 +241,15 @@ export default function AdminDashboard() {
     const message = replyInputs[userId]?.trim();
     if (!message) return;
 
-    try {
-      console.log(`✉️ Sending reply to ${userId}:`, message);
-      const { data, error } = await supabase.from("support_messages").insert({
-        user_id: userId,
-        sender: "admin",
-        message,
-        created_at: new Date().toISOString(),
-      });
+    const { error } = await supabase.from("support_messages").insert({
+      user_id: userId,
+      sender: "admin",
+      message,
+      created_at: new Date().toISOString(),
+    });
 
-      if (error) {
-        console.error("❌ Failed to send reply:", error);
-        return;
-      }
-
-      console.log("✅ Reply sent:", data);
+    if (!error) {
       setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
-    } catch (err) {
-      console.error("🚨 Error sending reply:", err);
     }
   };
 
@@ -297,7 +271,6 @@ export default function AdminDashboard() {
     <Box p={[4, 6, 8]} maxW="100vw">
       <Heading mb={6}>Admin Dashboard</Heading>
 
-      {/* ACCOUNTS TABLE */}
       <Box overflowX="auto" mb={10}>
         <Table size="sm" minW="1000px">
           <Thead>
@@ -398,20 +371,12 @@ export default function AdminDashboard() {
 
       <Divider my={6} />
 
-      {/* SUPPORT CHAT */}
       <Heading size="md" mb={4}>
         Live Support Messages
       </Heading>
 
       {Object.entries(groupedMessages).map(([userId, msgs]) => (
-        <Box
-          key={userId}
-          mb={6}
-          p={4}
-          border="1px solid"
-          borderColor="gray.200"
-          rounded="xl"
-        >
+        <Box key={userId} mb={6} p={4} border="1px solid" rounded="xl">
           <Text fontWeight="bold" mb={2}>
             User ID: {userId}
           </Text>
