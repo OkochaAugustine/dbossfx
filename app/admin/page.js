@@ -70,7 +70,6 @@ export default function AdminDashboard() {
     try {
       const res = await authFetch("/api/admin/getAccounts");
       const result = await res.json();
-
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to fetch accounts");
 
@@ -95,32 +94,48 @@ export default function AdminDashboard() {
     }
   };
 
-  // ------------------- REALTIME USERS -------------------
+  // ------------------- RELIABLE LIVE UPDATES -------------------
   useEffect(() => {
-    const channel = supabase
+    // Always fetch once on mount
+    fetchAccounts();
+
+    // Listener for new users
+    const userChannel = supabase
       .channel("admin-users-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "users" },
+        { event: "INSERT", schema: "public", table: "users" },
         async () => {
-          console.log("🔄 Users table changed → refetching...");
+          console.log("🆕 New user registered → refetching accounts");
+          await fetchAccounts();
+        }
+      )
+      .subscribe();
+
+    // Listener for new account statements
+    const accountChannel = supabase
+      .channel("admin-account-updates")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "account_statements" },
+        async () => {
+          console.log("💰 New account statement → refetching accounts");
           await fetchAccounts();
         }
       )
       .subscribe();
 
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(userChannel);
+      supabase.removeChannel(accountChannel);
     };
   }, []);
 
   // ------------------- SAVE ACCOUNT -------------------
   const handleSave = async (account) => {
     setSavingId(account.user_id);
-
     try {
       const isNew = !account.account_id;
-
       const url = isNew
         ? "/api/admin/createAccount"
         : "/api/admin/updateAccount";
@@ -143,9 +158,7 @@ export default function AdminDashboard() {
         method: "POST",
         body: JSON.stringify(bodyData),
       });
-
       const result = await res.json();
-
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to save account");
 
@@ -154,7 +167,7 @@ export default function AdminDashboard() {
         status: "success",
       });
 
-      await fetchAccounts(); // ✅ Ensure UI sync
+      await fetchAccounts();
     } catch (err) {
       toast({
         title: "Error",
@@ -172,15 +185,12 @@ export default function AdminDashboard() {
       return;
 
     setDeletingId(userId);
-
     try {
       const res = await authFetch("/api/admin/deleteUser", {
         method: "POST",
         body: JSON.stringify({ user_id: userId }),
       });
-
       const result = await res.json();
-
       if (!res.ok || !result.success)
         throw new Error(result.error || "Failed to delete user");
 
@@ -189,7 +199,7 @@ export default function AdminDashboard() {
         status: "success",
       });
 
-      await fetchAccounts(); // ✅ Clean refresh
+      await fetchAccounts();
     } catch (err) {
       toast({
         title: "Delete failed",
@@ -223,7 +233,6 @@ export default function AdminDashboard() {
         { event: "*", schema: "public", table: "support_messages" },
         (payload) => {
           if (!mounted) return;
-
           if (payload.eventType === "INSERT") {
             setMessages((prev) => [...prev, payload.new]);
           }

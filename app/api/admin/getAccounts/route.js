@@ -1,16 +1,16 @@
 // app/api/admin/getAccounts/route.js
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
 
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-export async function GET(req) {
-  const supabase = getSupabaseServer();
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
+export async function GET() {
   try {
-    console.log("🔥 GET /api/admin/getAccounts called");
 
-    // 1️⃣ Fetch all users with their account_statements (LEFT JOIN style)
     const { data: users, error } = await supabase
       .from("users")
       .select(`
@@ -18,70 +18,47 @@ export async function GET(req) {
         full_name,
         email,
         phone,
+        created_at,
         account_statements (
           id,
           balance,
           earned_profit,
           active_deposit
         )
-      `)
-      .order("created_at", { ascending: true });
+      `);
 
     if (error) throw error;
 
-    // 2️⃣ Ensure all users have an account_statements record
-    const accountsData = [];
+    const formatted = users.map((u) => {
+      const acc = u.account_statements?.[0];
 
-    for (const user of users) {
-      let account = user.account_statements;
+      return {
+        user_id: u.id,
+        full_name: u.full_name || "Unknown",
+        email: u.email,
+        phone: u.phone || "",
+        account_id: acc?.id || u.id,
+        balance: acc?.balance ?? 0,
+        earned_profit: acc?.earned_profit ?? 0,
+        active_deposit: acc?.active_deposit ?? 0,
+        created_at: u.created_at
+      };
+    });
 
-      if (!account) {
-        // Account missing, create default
-        const { data: newAccount, error: createError } = await supabase
-          .from("account_statements")
-          .insert({
-            user_id: user.id,
-            balance: 0,
-            earned_profit: 0,
-            active_deposit: 0,
-            created_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
+    formatted.sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
 
-        if (createError) {
-          console.error("❌ Failed to create default account for user", user.id, createError);
-          // Use fallback zero account instead of skipping
-          account = { id: null, balance: 0, earned_profit: 0, active_deposit: 0 };
-        } else {
-          account = newAccount;
-          console.log("ℹ Created default account for user", user.id);
-        }
-      }
-
-      accountsData.push({
-        user_id: user.id,
-        full_name: user.full_name,
-        email: user.email,
-        phone: user.phone,
-        account_id: account.id,
-        balance: account.balance,
-        earned_profit: account.earned_profit,
-        active_deposit: account.active_deposit,
-      });
-    }
-
-    // ✅ Success response
-    return new Response(
-      JSON.stringify({ success: true, data: accountsData }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return NextResponse.json({
+      success: true,
+      data: formatted
+    });
 
   } catch (err) {
-    console.error("🚨 Error fetching accounts", err);
-    return new Response(
-      JSON.stringify({ success: false, error: err.message || err }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+
+    console.error(err);
+
+    return NextResponse.json(
+      { success:false, error:err.message },
+      { status:500 }
     );
   }
 }
