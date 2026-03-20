@@ -1,71 +1,81 @@
-// app/admin/register/page.js
-// @ts-nocheck
 "use client";
 
 import { useState } from "react";
-import { useToast, Button, Input, FormControl, FormLabel, VStack, Box, Heading, Text } from "@chakra-ui/react";
+import { useRouter } from "next/navigation";
+import {
+  useToast,
+  Button,
+  Input,
+  FormControl,
+  FormLabel,
+  VStack,
+  Box,
+  Heading,
+  Text,
+  Link
+} from "@chakra-ui/react";
 
-export default function RegisterPage() {
-  const [form, setForm] = useState({
-    fullName: "",
-    email: "",
-    phone: "",
-    password: "",
-    confirmPassword: "",
-  });
-  const [loading, setLoading] = useState(false);
-  const [emailSent, setEmailSent] = useState(false);
+export default function AdminRegister() {
+  const router = useRouter();
   const toast = useToast();
 
-  const handleChange = (e) => setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const [form, setForm] = useState({
+    email: "",
+    password: ""
+  });
 
-  const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const validatePhone = (phone) => /^\d{7,15}$/.test(phone);
+  const [loading, setLoading] = useState(false);
+
+  const handleChange = (e) => {
+    setForm((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // ✅ Basic validation
-    if (!form.fullName || !form.email || !form.phone || !form.password || !form.confirmPassword) {
-      toast({ title: "Error", description: "Please fill all fields", status: "error" });
+    if (!form.email || !form.password) {
+      toast({
+        title: "Please fill all fields",
+        status: "error"
+      });
       return;
     }
-    if (!validateEmail(form.email)) {
-      toast({ title: "Error", description: "Invalid email format", status: "error" });
-      return;
-    }
-    if (!validatePhone(form.phone)) {
-      toast({ title: "Error", description: "Invalid phone number", status: "error" });
-      return;
-    }
-    if (form.password !== form.confirmPassword) {
-      toast({ title: "Error", description: "Passwords do not match", status: "error" });
-      return;
-    }
-
-    setLoading(true);
 
     try {
+      setLoading(true);
+
+      // ✅ REGISTER API
       const res = await fetch("/api/admin/register", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify(form),
+        credentials: "include"
       });
 
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Registration failed");
+      const data = await res.json();
 
-      setEmailSent(true);
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Registration failed");
+      }
+
       toast({
-        title: "Success",
-        description: "✅ Check your email for the confirmation link",
-        status: "success",
-        duration: 5000,
+        title: "Admin registered successfully",
+        status: "success"
       });
 
-      setForm({ fullName: "", email: "", phone: "", password: "", confirmPassword: "" });
+      router.replace("/admin");
+
     } catch (err) {
-      toast({ title: "Error", description: err.message, status: "error" });
+      toast({
+        title: "Registration error",
+        description: err.message,
+        status: "error"
+      });
     } finally {
       setLoading(false);
     }
@@ -73,46 +83,58 @@ export default function RegisterPage() {
 
   return (
     <Box py={16} bg="gray.50" minH="100vh">
-      <Box maxW="500px" mx="auto" bg="white" p={10} rounded="2xl" shadow="xl">
-        <Heading textAlign="center" mb={4}>Create Account</Heading>
-        {!emailSent ? (
-          <form onSubmit={handleSubmit}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Full Name</FormLabel>
-                <Input name="fullName" value={form.fullName} onChange={handleChange} />
-              </FormControl>
+      <Box maxW="400px" mx="auto" bg="white" p={10} rounded="2xl" shadow="xl">
+        <Heading textAlign="center" mb={6}>
+          Admin Register
+        </Heading>
 
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
-                <Input name="email" type="email" value={form.email} onChange={handleChange} />
-              </FormControl>
+        <form onSubmit={handleSubmit}>
+          <VStack spacing={4}>
 
-              <FormControl isRequired>
-                <FormLabel>Phone</FormLabel>
-                <Input name="phone" type="tel" value={form.phone} onChange={handleChange} />
-              </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Email</FormLabel>
+              <Input
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+              />
+            </FormControl>
 
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
-                <Input name="password" type="password" value={form.password} onChange={handleChange} />
-              </FormControl>
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <Input
+                name="password"
+                type="password"
+                value={form.password}
+                onChange={handleChange}
+              />
+            </FormControl>
 
-              <FormControl isRequired>
-                <FormLabel>Confirm Password</FormLabel>
-                <Input name="confirmPassword" type="password" value={form.confirmPassword} onChange={handleChange} />
-              </FormControl>
+            <Button
+              colorScheme="yellow"
+              w="full"
+              type="submit"
+              isLoading={loading}
+            >
+              Register
+            </Button>
 
-              <Button colorScheme="yellow" w="full" type="submit" isLoading={loading}>
-                Register
-              </Button>
-            </VStack>
-          </form>
-        ) : (
-          <Text textAlign="center" color="green.600" fontWeight="bold">
-            ✅ Check your email for the confirmation link
-          </Text>
-        )}
+            {/* 🔁 BACK TO LOGIN */}
+            <Text fontSize="sm" textAlign="center">
+              Already have an account?{" "}
+              <Link
+                color="yellow.500"
+                fontWeight="semibold"
+                cursor="pointer"
+                onClick={() => router.push("/admin/login")}
+              >
+                Login here
+              </Link>
+            </Text>
+
+          </VStack>
+        </form>
       </Box>
     </Box>
   );

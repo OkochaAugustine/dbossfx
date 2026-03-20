@@ -12,7 +12,6 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import { ArrowBackIcon } from "@chakra-ui/icons";
-import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
 export default function StartTrading({ userId }) {
@@ -20,24 +19,32 @@ export default function StartTrading({ userId }) {
 
   const MAX_TRADES_PER_DAY = 20;
   const TARGET_DAILY_PROFIT = 200;
-  const RESET_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours (ms)
+  const RESET_INTERVAL = 24 * 60 * 60 * 1000;
 
   const [profit, setProfit] = useState(0);
   const [displayedProfit, setDisplayedProfit] = useState(0);
   const [trading, setTrading] = useState(false);
-  const [account, setAccount] = useState({ balance: 0 });
+
+  const [account, setAccount] = useState({
+    balance: 0,
+    earned_profit: 0,
+    active_deposit: 0
+  });
+
   const [loading, setLoading] = useState(true);
+
   const [dailyProfit, setDailyProfit] = useState(0);
   const [tradesLeft, setTradesLeft] = useState(MAX_TRADES_PER_DAY);
   const [limitReached, setLimitReached] = useState(false);
 
   /* =======================
-     ✅ 24-HOUR RESET LOGIC
+     24 HOUR RESET
   ======================== */
   useEffect(() => {
     if (!userId) return;
 
     const now = Date.now();
+
     const lastResetKey = `lastReset_${userId}`;
     const profitKey = `dailyProfit_${userId}`;
     const tradesKey = `tradesLeft_${userId}`;
@@ -46,7 +53,7 @@ export default function StartTrading({ userId }) {
     const diff = now - lastReset;
 
     if (!lastReset || diff >= RESET_INTERVAL) {
-      // ✅ FULL RESET
+
       setDailyProfit(0);
       setTradesLeft(MAX_TRADES_PER_DAY);
       setLimitReached(false);
@@ -54,9 +61,12 @@ export default function StartTrading({ userId }) {
       localStorage.setItem(lastResetKey, String(now));
       localStorage.setItem(profitKey, "0");
       localStorage.setItem(tradesKey, String(MAX_TRADES_PER_DAY));
+
     } else {
+
       const storedProfit = Number(localStorage.getItem(profitKey)) || 0;
-      const storedTrades = Number(localStorage.getItem(tradesKey)) || MAX_TRADES_PER_DAY;
+      const storedTrades =
+        Number(localStorage.getItem(tradesKey)) || MAX_TRADES_PER_DAY;
 
       setDailyProfit(storedProfit);
       setTradesLeft(storedTrades);
@@ -65,31 +75,59 @@ export default function StartTrading({ userId }) {
         setLimitReached(true);
       }
     }
+
   }, [userId]);
 
   /* =======================
-     FETCH ACCOUNT BALANCE
+     FETCH ACCOUNT
   ======================== */
   useEffect(() => {
+
     if (!userId) return;
 
     let mounted = true;
 
     const fetchAccount = async () => {
-      const { data } = await supabase
-        .from("account_statements")
-        .select("*")
-        .eq("user_id", userId)
-        .single();
+      try {
 
-      if (!mounted) return;
+        console.log("🔵 Fetching account for:", userId);
 
-      setAccount(data || { balance: 0 });
-      setLoading(false);
+        const res = await fetch(`/api/account/${userId}`);
+
+        const data = await res.json();
+
+        console.log("🔵 Account API response:", data);
+
+        if (!mounted) return;
+
+        const acc = data.account || {};
+
+        setAccount({
+          balance: Number(acc.balance || 0),
+          earned_profit: Number(acc.earned_profit || 0),
+          active_deposit: Number(acc.active_deposit || 0)
+        });
+
+        setLoading(false);
+
+      } catch (err) {
+
+        console.error("❌ Account fetch error:", err);
+        setLoading(false);
+
+      }
     };
 
     fetchAccount();
-    return () => (mounted = false);
+
+    // refresh balance every 5 seconds
+    const interval = setInterval(fetchAccount, 5000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+
   }, [userId]);
 
   const calculateTradeAmount = () =>
@@ -99,6 +137,7 @@ export default function StartTrading({ userId }) {
      START TRADE
   ======================== */
   const startTrade = () => {
+
     if (limitReached) {
       alert("Stop! Limit exceeded, come again in 24 hours");
       return;
@@ -113,25 +152,35 @@ export default function StartTrading({ userId }) {
     setDisplayedProfit(0);
 
     const remainingProfit = TARGET_DAILY_PROFIT - dailyProfit;
-    const profitEarned = Math.min(calculateTradeAmount() * 0.05, remainingProfit);
+
+    const profitEarned = Math.min(
+      calculateTradeAmount() * 0.05,
+      remainingProfit
+    );
 
     setProfit(profitEarned);
+
   };
 
   /* =======================
      PROFIT ANIMATION
   ======================== */
   useEffect(() => {
+
     if (!trading || profit <= 0) return;
 
     let current = 0;
+
     const step = profit / 150;
 
     const interval = setInterval(async () => {
+
       current += step;
 
       if (current >= profit) {
+
         clearInterval(interval);
+
         current = profit;
 
         const newProfit = dailyProfit + profit;
@@ -148,19 +197,31 @@ export default function StartTrading({ userId }) {
           localStorage.setItem(`lastReset_${userId}`, String(Date.now()));
         }
 
-        await supabase
-          .from("account_statements")
-          .update({ balance: account.balance + profit })
-          .eq("user_id", userId);
+        await fetch("/api/account/update-balance", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId,
+            profit,
+          }),
+        });
 
-        setAccount((p) => ({ ...p, balance: p.balance + profit }));
+        setAccount((prev) => ({
+          ...prev,
+          balance: prev.balance + profit
+        }));
+
         setTrading(false);
       }
 
       setDisplayedProfit(current);
+
     }, 40);
 
     return () => clearInterval(interval);
+
   }, [trading, profit]);
 
   if (loading) {
@@ -191,10 +252,9 @@ export default function StartTrading({ userId }) {
         maxW="lg"
         w="100%"
       >
-        {/* ✅ BACK TO DASHBOARD */}
         <IconButton
           icon={<ArrowBackIcon />}
-          aria-label="Back to dashboard"
+          aria-label="Back"
           alignSelf="flex-start"
           colorScheme="yellow"
           variant="ghost"
@@ -239,6 +299,7 @@ export default function StartTrading({ userId }) {
             Stop! Limit exceeded, come again in 24 hours
           </Text>
         )}
+
       </VStack>
     </Flex>
   );

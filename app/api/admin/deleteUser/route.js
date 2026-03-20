@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { connectDB } from "@/lib/mongodb";
+import User from "@/models/User";
+import AccountStatement from "@/models/AccountStatement";
+import SupportMessage from "@/models/SupportMessage";
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+export const runtime = "nodejs";
 
 export async function POST(req) {
   try {
@@ -19,50 +19,36 @@ export async function POST(req) {
 
     console.log("Deleting user:", user_id);
 
-    // 1️⃣ Delete account statement
-    const { error: accError } = await supabaseAdmin
-      .from("account_statements")
-      .delete()
-      .eq("user_id", user_id);
+    // connect MongoDB
+    await connectDB();
 
-    if (accError) {
-      console.error("Account delete error:", accError);
-      throw accError;
-    }
+    // 1️⃣ Delete account statements
+    const accDelete = await AccountStatement.deleteMany({ user_id });
+
+    console.log("Account statements deleted:", accDelete.deletedCount);
 
     // 2️⃣ Delete support messages
-    const { error: msgError } = await supabaseAdmin
-      .from("support_messages")
-      .delete()
-      .eq("user_id", user_id);
+    const msgDelete = await SupportMessage.deleteMany({ user_id });
 
-    if (msgError) {
-      console.error("Message delete error:", msgError);
-      throw msgError;
+    console.log("Support messages deleted:", msgDelete.deletedCount);
+
+    // 3️⃣ Delete user record
+    const userDelete = await User.findByIdAndDelete(user_id);
+
+    if (!userDelete) {
+      return NextResponse.json(
+        { success: false, error: "User not found" },
+        { status: 404 }
+      );
     }
 
-    // 3️⃣ Delete user table record
-    const { error: userError } = await supabaseAdmin
-      .from("users")
-      .delete()
-      .eq("id", user_id);
-
-    if (userError) {
-      console.error("User table delete error:", userError);
-      throw userError;
-    }
-
-    // 4️⃣ Delete from Supabase Auth (SAFE TRY)
-    try {
-      await supabaseAdmin.auth.admin.deleteUser(user_id);
-    } catch (authError) {
-      console.warn("Auth delete warning:", authError.message);
-      // Do not crash if auth delete fails
-    }
+    console.log("User deleted successfully");
 
     return NextResponse.json({ success: true });
+
   } catch (err) {
     console.error("FINAL DELETE ERROR:", err);
+
     return NextResponse.json(
       { success: false, error: err.message },
       { status: 500 }

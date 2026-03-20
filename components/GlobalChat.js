@@ -12,11 +12,11 @@ import {
   IconButton,
 } from "@chakra-ui/react";
 import { ChatIcon, CloseIcon } from "@chakra-ui/icons";
-import { supabase } from "@/lib/supabaseClient";
 import { keyframes } from "@emotion/react";
 
-export default function GlobalChat() {
+export default function GlobalChat({ isAdmin = false }) {
   const [userId, setUserId] = useState(null);
+  const [userChecked, setUserChecked] = useState(false);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [open, setOpen] = useState(false);
@@ -30,85 +30,108 @@ export default function GlobalChat() {
     100% { transform: scale(1); }
   `;
 
-  // Get current user
+  // ---------------- GET CURRENT USER ----------------
   useEffect(() => {
     const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) setUserId(data.user.id);
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const data = await res.json();
+
+        if (data?.success && data.user?.id) {
+          setUserId(data.user.id);
+        }
+      } catch (err) {
+        console.error("User fetch error:", err);
+      } finally {
+        setUserChecked(true);
+      }
     };
     fetchUser();
   }, []);
 
-  // Fetch messages & subscribe to real-time updates (user-specific)
-  useEffect(() => {
-    if (!userId) return;
+  // ---------------- FETCH MESSAGES ----------------
+  const fetchMessages = async () => {
+    if (!userId && !isAdmin) return;
 
-    const fetchMessages = async () => {
-      const { data } = await supabase
-        .from("support_messages")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
-      setMessages(data || []);
-    };
+    let url = "/api/mongo/support?";
+    if (userId) url += `userId=${userId}`;
+    if (isAdmin) url += `&admin=true`;
+
+    try {
+      const res = await fetch(url, { credentials: "include" });
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.messages)) {
+        setMessages(data.messages);
+      }
+    } catch (err) {
+      console.error("Failed to fetch messages:", err);
+    }
+  };
+
+  // ---------------- POLLING ----------------
+  useEffect(() => {
+    if (!userChecked) return;
+
+    if (!userId && !isAdmin) return;
 
     fetchMessages();
+    const interval = setInterval(fetchMessages, 3000);
+    return () => clearInterval(interval);
+  }, [userId, userChecked, isAdmin]);
 
-    // ✅ Subscribe only to messages for this user
-    const channel = supabase
-      .channel(`support-chat-${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "support_messages",
-          filter: `user_id=eq.${userId}`, // only messages for this user
-        },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
-        }
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, [userId]);
-
-  // Scroll to bottom on new messages
+  // ---------------- AUTO SCROLL ----------------
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
 
-  // Send message
+  // ---------------- SEND MESSAGE ----------------
   const sendMessage = async () => {
     if (!newMessage.trim() || !userId) return;
 
-    await supabase.from("support_messages").insert({
-      user_id: userId,
-      sender: "user",
-      message: newMessage,
-    });
+    try {
+      const res = await fetch("/api/mongo/support", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          userId,
+          sender: "user",
+          message: newMessage,
+        }),
+      });
 
-    setNewMessage("");
+      const data = await res.json();
+      if (data?.success) {
+        setNewMessage("");
+        fetchMessages();
+      }
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    }
   };
 
-  const unreadCount = messages.filter((m) => m.sender === "admin" && !open)
-    .length;
+  const unreadCount = messages.filter(
+    (m) => m.sender === "admin" && !open
+  ).length;
+
+  // ---------------- RENDER ----------------
+  if (userChecked && !userId && !isAdmin) {
+    // Visitors cannot use chat
+    return null;
+  }
 
   return (
     <Box
       position="fixed"
-      bottom={{ base: "env(safe-area-inset-bottom, 16px)", md: "20px" }}
+      bottom="20px"
       left="50%"
       transform="translateX(-50%)"
       zIndex={1000}
-      pointerEvents="none"
       width="100%"
       display="flex"
       justifyContent="center"
     >
-      <Box pointerEvents="auto">
-        {/* Toggle button */}
+      <Box>
         <Box position="relative" display="flex" justifyContent="center">
           <IconButton
             icon={<ChatIcon />}
@@ -119,7 +142,6 @@ export default function GlobalChat() {
             minW="56px"
             boxShadow="2xl"
             onClick={() => setOpen((v) => !v)}
-            touchAction="manipulation"
           />
 
           {unreadCount > 0 && !open && (
@@ -137,7 +159,6 @@ export default function GlobalChat() {
           )}
         </Box>
 
-        {/* Chat window */}
         {open && (
           <Box
             mt={3}
@@ -157,11 +178,7 @@ export default function GlobalChat() {
               p={3}
               justify="space-between"
             >
-              <Box>
-                <Text fontWeight="bold">💬 Support Chat</Text>
-                <Text fontSize="xs">Usually replies within minutes</Text>
-              </Box>
-
+              <Text fontWeight="bold">💬 Support Chat</Text>
               <IconButton
                 aria-label="Close"
                 icon={<CloseIcon />}
@@ -172,38 +189,45 @@ export default function GlobalChat() {
             </HStack>
 
             {/* Messages */}
-            <VStack flex="1" p={3} spacing={2} overflowY="auto" align="stretch">
+            <VStack flex="1" p={3} spacing={2} overflowY="auto">
+              {messages.length === 0 && (
+                <Text fontSize="sm" color="gray.500" textAlign="center">
+                  No messages yet. Start the conversation!
+                </Text>
+              )}
+
               {messages.map((msg) => (
-                <HStack
-                  key={msg.id}
-                  justify={msg.sender === "user" ? "flex-end" : "flex-start"}
+                <Box
+                  key={msg._id}
+                  alignSelf={msg.sender === "user" ? "flex-end" : "flex-start"}
+                  bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
+                  px={4}
+                  py={2}
+                  rounded="2xl"
+                  maxW="80%"
                 >
-                  <Box
-                    bg={msg.sender === "user" ? "yellow.300" : "gray.200"}
-                    px={4}
-                    py={2}
-                    rounded="2xl"
-                    maxW="80%"
-                  >
-                    <Text fontSize="sm">{msg.message}</Text>
-                  </Box>
-                </HStack>
+                  <Text fontSize="sm">
+                    {msg.sender === "user" ? "You" : "Support"}: {msg.message}
+                  </Text>
+                </Box>
               ))}
               <div ref={bottomRef} />
             </VStack>
 
             {/* Input */}
-            <HStack p={3} borderTop="1px solid #eee">
-              <Input
-                placeholder="Type a message..."
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              />
-              <Button colorScheme="yellow" minH="44px" onClick={sendMessage}>
-                Send
-              </Button>
-            </HStack>
+            {!isAdmin && (
+              <HStack p={3} borderTop="1px solid #eee">
+                <Input
+                  placeholder="Type a message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                />
+                <Button colorScheme="yellow" minH="44px" onClick={sendMessage}>
+                  Send
+                </Button>
+              </HStack>
+            )}
           </Box>
         )}
       </Box>

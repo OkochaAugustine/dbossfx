@@ -1,11 +1,16 @@
 import mongoose from "mongoose";
 
-const UserSchema = new mongoose.Schema({
-  _id: { type: String, required: true }, // use UUID
-  full_name: { type: String, default: "Unknown" },
-  email: { type: String, required: true, unique: true },
-  phone: { type: String, default: "" },
-  created_at: { type: Date, default: Date.now },
-});
+const UserSchema = new mongoose.Schema(
+  {
+    full_name: { type: String, default: "Unknown" },
+    email: { type: String, required: true, unique: true },
+    phone: { type: String, default: "" },
+    password: { type: String, required: true },
+    created_at: { type: Date, default: Date.now },
+  },
+  { versionKey: false }
+);
 
-export default mongoose.models.User || mongoose.model("User", UserSchema);
+delete mongoose.models.User; // ⚡ fix caching
+
+export default mongoose.model("User", UserSchema);

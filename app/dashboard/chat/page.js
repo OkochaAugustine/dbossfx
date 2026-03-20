@@ -12,13 +12,13 @@ import {
   Spinner,
   Heading,
 } from "@chakra-ui/react";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function ChatPage() {
   const [userId, setUserId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
+
   const bottomRef = useRef(null);
 
   /* =====================
@@ -26,9 +26,18 @@ export default function ChatPage() {
   ====================== */
   useEffect(() => {
     const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) setUserId(data.user.id);
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
+
+        if (data?.user?.id) {
+          setUserId(data.user.id);
+        }
+      } catch (err) {
+        console.error("User fetch error:", err);
+      }
     };
+
     getUser();
   }, []);
 
@@ -39,41 +48,19 @@ export default function ChatPage() {
     if (!userId) return;
 
     const fetchMessages = async () => {
-      const { data } = await supabase
-        .from("support_messages")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: true });
+      try {
+        const res = await fetch(`/api/chat/messages?userId=${userId}`);
+        const data = await res.json();
 
-      setMessages(data || []);
-      setLoading(false);
+        setMessages(data.messages || []);
+      } catch (err) {
+        console.error("Fetch messages error:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchMessages();
-
-    /* =====================
-       REALTIME SUBSCRIPTION
-    ====================== */
-    const channel = supabase
-      .channel("support-chat")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "support_messages",
-        },
-        (payload) => {
-          if (payload.new.user_id === userId) {
-            setMessages((prev) => [...prev, payload.new]);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [userId]);
 
   /* =====================
@@ -89,13 +76,28 @@ export default function ChatPage() {
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
 
-    await supabase.from("support_messages").insert({
-      user_id: userId,
-      sender: "user",
-      message: newMessage,
-    });
+    try {
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          sender: "user",
+          message: newMessage,
+        }),
+      });
 
-    setNewMessage("");
+      const data = await res.json();
+
+      if (data.success) {
+        setMessages((prev) => [...prev, data.message]);
+        setNewMessage("");
+      }
+    } catch (err) {
+      console.error("Send message error:", err);
+    }
   };
 
   if (loading) {
@@ -123,22 +125,17 @@ export default function ChatPage() {
           <Heading size="md" color="black">
             💬 Live Support Chat
           </Heading>
+
           <Text fontSize="sm" color="blackAlpha.800">
             Our team usually replies within minutes
           </Text>
         </Box>
 
         {/* MESSAGES */}
-        <VStack
-          flex="1"
-          p={4}
-          spacing={3}
-          overflowY="auto"
-          align="stretch"
-        >
+        <VStack flex="1" p={4} spacing={3} overflowY="auto" align="stretch">
           {messages.map((msg) => (
             <HStack
-              key={msg.id}
+              key={msg._id || msg.id}
               justify={msg.sender === "user" ? "flex-end" : "flex-start"}
             >
               <Box
@@ -163,6 +160,7 @@ export default function ChatPage() {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendMessage()}
           />
+
           <Button colorScheme="yellow" onClick={sendMessage}>
             Send
           </Button>

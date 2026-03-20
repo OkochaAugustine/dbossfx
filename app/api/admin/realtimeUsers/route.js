@@ -1,65 +1,74 @@
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+import connectToMongo from "@/lib/mongodb";
+import User from "@/models/User";
+import AccountStatement from "@/models/AccountStatement";
 
 export async function GET(req) {
   const encoder = new TextEncoder();
 
+  let lastCheck = new Date(); // track new users
+
   const stream = new ReadableStream({
     async start(controller) {
+      await connectToMongo();
+
+      // Keep connection alive (important for SSE)
       const keepAlive = setInterval(() => {
         controller.enqueue(
           encoder.encode(`data: ${JSON.stringify({ keepAlive: true })}\n\n`)
         );
       }, 15000);
 
-      const channel = supabase
-        .channel("public:users")
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "users" },
-          async (payload) => {
-            try {
-              let { data: account } = await supabase
-                .from("account_statements")
-                .select("*")
-                .eq("user_id", payload.new.id)
-                .maybeSingle();
+      // Poll for new users every 5 seconds
+      const interval = setInterval(async () => {
+        try {
+          const newUsers = await User.find({
+            createdAt: { $gt: lastCheck },
+          }).lean();
 
+          if (newUsers.length > 0) {
+            lastCheck = new Date();
+
+            for (const user of newUsers) {
+              let account = await AccountStatement.findOne({
+                user_id: user._id.toString(),
+              }).lean();
+
+              // Create account if missing
               if (!account) {
-                const { data: newAccount } = await supabase
-                  .from("account_statements")
-                  .insert({
-                    user_id: payload.new.id,
-                    balance: 0,
-                    earned_profit: 0,
-                    active_deposit: 0,
-                    created_at: new Date().toISOString(),
-                  })
-                  .select()
-                  .single();
-                account = newAccount;
+                account = await AccountStatement.create({
+                  user_id: user._id.toString(),
+                  balance: 0,
+                  earned_profit: 0,
+                  active_deposit: 0,
+                });
               }
 
               controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ ...payload.new, account })}\n\n`)
+                encoder.encode(
+                  `data: ${JSON.stringify({
+                    user_id: user._id.toString(),
+                    full_name: user.full_name || "No Name",
+                    email: user.email,
+                    phone: user.phone || "",
+                    account,
+                    created_at: user.createdAt,
+                  })}\n\n`
+                )
               );
-            } catch (err) {
-              console.error("Realtime user error:", err);
             }
           }
-        )
-        .subscribe();
+        } catch (err) {
+          console.error("Realtime Mongo error:", err);
+        }
+      }, 5000);
 
+      // Cleanup on disconnect
       req.signal.addEventListener("abort", () => {
         clearInterval(keepAlive);
-        supabase.removeChannel(channel);
+        clearInterval(interval);
         controller.close();
       });
     },

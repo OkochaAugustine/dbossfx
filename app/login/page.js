@@ -19,11 +19,11 @@ import {
   Center,
 } from "@chakra-ui/react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
+
   const [form, setForm] = useState({ email: "", password: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -48,18 +48,21 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      // optional debug (remove after confirmed working)
-      console.log("SUPABASE URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: form.email,
-        password: form.password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email, password: form.password }),
+        credentials: "include",
       });
 
-      if (error) throw error;
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Login failed");
+      }
 
       toast({
-        title: `Welcome back, ${data.user.email}!`,
+        title: `Welcome back, ${data.user.full_name}!`,
         status: "success",
         duration: 3000,
       });
@@ -70,7 +73,7 @@ export default function LoginPage() {
 
       toast({
         title: "Login failed",
-        description: err?.message || "Network error. Check console.",
+        description: err?.message || "Network error",
         status: "error",
         duration: 5000,
       });
@@ -79,6 +82,7 @@ export default function LoginPage() {
     }
   };
 
+  // Full-screen loading spinner like registration page
   if (loading) {
     return (
       <Center bg="gray.50" minH="100vh">

@@ -24,7 +24,6 @@ import {
   ScaleFade,
 } from "@chakra-ui/react";
 import { useAccount } from "@/app/hooks/useAccount";
-import { supabase } from "@/lib/supabaseClient";
 
 export default function WithdrawPage() {
   const toast = useToast();
@@ -39,11 +38,11 @@ export default function WithdrawPage() {
     id_number: "",
     face_verified: false,
   });
+
   const [kycVerified, setKycVerified] = useState(false);
   const [withdrawLoading, setWithdrawLoading] = useState(false);
   const [withdrawMessage, setWithdrawMessage] = useState("");
 
-  // Load KYC status from AccountStatement
   useEffect(() => {
     if (account) {
       if (account.kyc_verified) {
@@ -56,15 +55,18 @@ export default function WithdrawPage() {
 
   const handleKycChange = (e) => {
     const { name, value, type, checked } = e.target;
+
     setKyc((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
     }));
   };
 
-  // Save KYC to Supabase and update local state
   const handleKycVerify = async () => {
-    const allFilled = Object.values(kyc).every((val) => val !== "" && val !== false);
+    const allFilled = Object.values(kyc).every(
+      (val) => val !== "" && val !== false
+    );
+
     if (!allFilled) {
       toast({
         title: "KYC incomplete",
@@ -75,14 +77,20 @@ export default function WithdrawPage() {
     }
 
     try {
-      await supabase
-        .from('"AccountStatement"') // exact table name in Supabase
-        .update({ kyc, kyc_verified: true })
-        .eq("user_id", account.user_id);
+      await fetch("/api/account/update-kyc", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: account.user_id,
+          kyc,
+        }),
+      });
 
-      // Update local state immediately
       setKycVerified(true);
-      account.kyc_verified = true; // ✅ button will now enable immediately
+      account.kyc_verified = true;
+
       onClose();
 
       toast({
@@ -123,17 +131,22 @@ export default function WithdrawPage() {
     setWithdrawLoading(true);
     setWithdrawMessage("");
 
-    // Simulate withdrawal process with loading steps
     const totalSteps = 5;
     let currentStep = 0;
 
     const interval = setInterval(() => {
       currentStep++;
-      setWithdrawMessage(`Processing withdrawal... Step ${currentStep} of ${totalSteps}`);
+
+      setWithdrawMessage(
+        `Processing withdrawal... Step ${currentStep} of ${totalSteps}`
+      );
+
       if (currentStep === totalSteps) {
         clearInterval(interval);
         setWithdrawLoading(false);
-        setWithdrawMessage("Timeout. Talk with our virtual assistance for help.");
+        setWithdrawMessage(
+          "Timeout. Talk with our virtual assistance for help."
+        );
       }
     }, 1200);
   };
@@ -148,22 +161,30 @@ export default function WithdrawPage() {
 
   return (
     <Box w="100%" maxW="600px" p={4}>
-      <Heading size="md" mb={4}>Withdraw Funds</Heading>
+      <Heading size="md" mb={4}>
+        Withdraw Funds
+      </Heading>
 
       <VStack spacing={4} align="stretch">
         <Text>
-          Your balance: <strong>${Number(account?.balance || 0).toFixed(2)}</strong>
+          Your balance:{" "}
+          <strong>${Number(account?.balance || 0).toFixed(2)}</strong>
         </Text>
+
         <Text>Note: Minimum balance $500 required to withdraw.</Text>
 
         {!kycVerified && (
-          <Button colorScheme="blue" onClick={onOpen}>Complete KYC</Button>
+          <Button colorScheme="blue" onClick={onOpen}>
+            Complete KYC
+          </Button>
         )}
 
         <Button
           colorScheme="green"
           onClick={handleWithdraw}
-          isDisabled={Number(account?.balance || 0) < 500 || withdrawLoading}
+          isDisabled={
+            Number(account?.balance || 0) < 500 || withdrawLoading
+          }
         >
           Withdraw
         </Button>
@@ -172,6 +193,7 @@ export default function WithdrawPage() {
           <ScaleFade initialScale={0.8} in={withdrawLoading}>
             <VStack mt={3}>
               <Spinner size="xl" color="yellow.400" />
+
               <Text fontSize="lg" fontWeight="bold" color="yellow.500">
                 {withdrawMessage || "Starting withdrawal..."}
               </Text>
@@ -186,58 +208,106 @@ export default function WithdrawPage() {
         )}
       </VStack>
 
-      {/* ===== KYC Modal ===== */}
       <Modal isOpen={isOpen} onClose={onClose} size="xl">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>KYC Verification</ModalHeader>
           <ModalCloseButton />
+
           <ModalBody>
             <VStack spacing={3} align="stretch">
               <FormControl>
                 <FormLabel>Full Name</FormLabel>
-                <Input name="full_name" value={kyc.full_name} onChange={handleKycChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Address</FormLabel>
-                <Input name="address" value={kyc.address} onChange={handleKycChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Mobile Number</FormLabel>
-                <Input name="mobile" value={kyc.mobile} onChange={handleKycChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>Next of Kin</FormLabel>
-                <Input name="next_of_kin" value={kyc.next_of_kin} onChange={handleKycChange} />
-              </FormControl>
-              <FormControl>
-                <FormLabel>ID Number</FormLabel>
-                <Input name="id_number" value={kyc.id_number} onChange={handleKycChange} />
+                <Input
+                  name="full_name"
+                  value={kyc.full_name}
+                  onChange={handleKycChange}
+                />
               </FormControl>
 
-              {/* ===== FACE VERIFICATION BUTTON ===== */}
+              <FormControl>
+                <FormLabel>Address</FormLabel>
+                <Input
+                  name="address"
+                  value={kyc.address}
+                  onChange={handleKycChange}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Mobile Number</FormLabel>
+                <Input
+                  name="mobile"
+                  value={kyc.mobile}
+                  onChange={handleKycChange}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>Next of Kin</FormLabel>
+                <Input
+                  name="next_of_kin"
+                  value={kyc.next_of_kin}
+                  onChange={handleKycChange}
+                />
+              </FormControl>
+
+              <FormControl>
+                <FormLabel>ID Number</FormLabel>
+                <Input
+                  name="id_number"
+                  value={kyc.id_number}
+                  onChange={handleKycChange}
+                />
+              </FormControl>
+
               <FormControl>
                 <FormLabel>Face Verification</FormLabel>
+
                 {!kyc.face_verified ? (
                   <Button
                     colorScheme="purple"
                     onClick={async () => {
                       try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        const stream =
+                          await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                          });
+
                         const video = document.createElement("video");
                         video.srcObject = stream;
                         video.play();
-                        await new Promise((resolve) => setTimeout(resolve, 1000));
+
+                        await new Promise((resolve) =>
+                          setTimeout(resolve, 1000)
+                        );
+
                         const canvas = document.createElement("canvas");
                         canvas.width = video.videoWidth;
                         canvas.height = video.videoHeight;
+
                         const ctx = canvas.getContext("2d");
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        stream.getTracks().forEach((track) => track.stop());
-                        setKyc((prev) => ({ ...prev, face_verified: true }));
+                        ctx.drawImage(
+                          video,
+                          0,
+                          0,
+                          canvas.width,
+                          canvas.height
+                        );
+
+                        stream
+                          .getTracks()
+                          .forEach((track) => track.stop());
+
+                        setKyc((prev) => ({
+                          ...prev,
+                          face_verified: true,
+                        }));
+
                         toast({
                           title: "Face Verified",
-                          description: "Face verification successful!",
+                          description:
+                            "Face verification successful!",
                           status: "success",
                           duration: 2000,
                           isClosable: true,
@@ -245,7 +315,8 @@ export default function WithdrawPage() {
                       } catch {
                         toast({
                           title: "Face Verification Failed",
-                          description: "Please allow camera access.",
+                          description:
+                            "Please allow camera access.",
                           status: "error",
                           duration: 3000,
                           isClosable: true,
@@ -256,18 +327,25 @@ export default function WithdrawPage() {
                     Start Face Verification
                   </Button>
                 ) : (
-                  <Text color="green.500">Face Verified ✔️</Text>
+                  <Text color="green.500">
+                    Face Verified ✔️
+                  </Text>
                 )}
               </FormControl>
             </VStack>
           </ModalBody>
+
           <ModalFooter>
-            <Button colorScheme="green" mr={3} onClick={handleKycVerify}>Verify</Button>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button colorScheme="green" mr={3} onClick={handleKycVerify}>
+              Verify
+            </Button>
+
+            <Button variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
           </ModalFooter>
         </ModalContent>
       </Modal>
     </Box>
   );
 }
-

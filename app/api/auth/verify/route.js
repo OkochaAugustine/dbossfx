@@ -1,67 +1,66 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
 import { NextResponse } from "next/server";
+import connectToMongo from "@/lib/mongodb";
+import User from "@/models/User";
+import AccountStatement from "@/models/AccountStatement";
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { sendVerificationEmail } from "@/lib/mailer";
 
-export async function GET(req) {
+export async function POST(req) {
   try {
-    const url = new URL(req.url);
-    const token = url.searchParams.get("token");
+    const { fullName, email, phone, password } = await req.json();
 
-    if (!token) {
+    if (!email || !password) {
       return NextResponse.json(
-        { success: false, error: "Missing verification token" },
+        { success: false, error: "Email and password required" },
         { status: 400 }
       );
     }
 
-    const supabase = getSupabaseServer();
+    await connectToMongo();
 
-    // 1️⃣ Look up token in email_verifications table
-    const { data: tokenRow, error: tokenError } = await supabase
-      .from("email_verifications")
-      .select("*")
-      .eq("token", token)
-      .single();
-
-    if (tokenError || !tokenRow) {
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
       return NextResponse.json(
-        { success: false, error: "Invalid or expired token" },
+        { success: false, error: "Email already registered" },
         { status: 400 }
       );
     }
 
-    // 2️⃣ Check expiration
-    if (new Date(tokenRow.expires_at) < new Date()) {
-      return NextResponse.json(
-        { success: false, error: "Token has expired" },
-        { status: 400 }
-      );
-    }
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const userId = tokenRow.user_id;
+    // ✅ CREATE TOKEN
+    const token = crypto.randomBytes(32).toString("hex");
 
-    // 3️⃣ Update Supabase Auth to confirm email
-    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
-      email_confirmed: true,
+    const newUser = await User.create({
+      full_name: fullName || "Unknown",
+      email,
+      phone: phone || "",
+      password: hashedPassword,
+      verification_token: token,
+      verification_expires: Date.now() + 1000 * 60 * 60 * 24, // 24h
+      is_verified: false,
     });
 
-    if (updateError) {
-      return NextResponse.json(
-        { success: false, error: "Failed to confirm email: " + updateError.message },
-        { status: 500 }
-      );
-    }
+    await AccountStatement.create({
+      user_id: newUser._id.toString(),
+      balance: 0,
+      earned_profit: 0,
+      active_deposit: 0,
+    });
 
-    // 4️⃣ Delete verification token
-    await supabase.from("email_verifications").delete().eq("token", token);
+    // ✅ SEND EMAIL
+    await sendVerificationEmail(email, token);
 
     return NextResponse.json({
       success: true,
-      message: "Email verified successfully! You can now log in.",
+      message: "Registration successful. Check your email to verify.",
     });
+
   } catch (err) {
-    console.error("Email verification error:", err);
+    console.error("❌ REGISTER ERROR:", err);
     return NextResponse.json(
-      { success: false, error: "Server error" },
+      { success: false, error: err.message },
       { status: 500 }
     );
   }

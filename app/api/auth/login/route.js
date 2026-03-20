@@ -1,32 +1,99 @@
 // Force Node runtime
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-import { getSupabaseServer } from "@/lib/supabaseServer";
+
+import connectToMongo from "@/lib/mongodb";
+import User from "@/models/User";
+import bcrypt from "bcryptjs";
+import { NextResponse } from "next/server";
 
 export async function POST(req) {
   try {
     const { email, password } = await req.json();
 
+    console.log("📥 Login attempt:", email);
+
+    /* =========================
+       VALIDATE INPUT
+    ========================== */
+
     if (!email || !password) {
-      return Response.json({ error: "Missing fields" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "Email and password are required" },
+        { status: 400 }
+      );
     }
 
-    const supabaseServer = getSupabaseServer();
+    /* =========================
+       CONNECT MONGODB
+    ========================== */
 
-    const { data, error } = await supabaseServer.auth.signInWithPassword({
-      email,
-      password,
+    await connectToMongo();
+    console.log("✅ MongoDB connected");
+
+    /* =========================
+       FIND USER
+    ========================== */
+
+    const user = await User.findOne({ email });
+
+    console.log("🔎 User found:", user ? user.email : "None");
+
+    if (!user) {
+      return NextResponse.json(
+        { success: false, error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
+
+    /* =========================
+       CHECK PASSWORD
+    ========================== */
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    console.log("🔑 Password match:", passwordMatch);
+
+    if (!passwordMatch) {
+      return NextResponse.json(
+        { success: false, error: "Invalid email or password" },
+        { status: 401 }
+      );
+    }
+
+    /* =========================
+       SUCCESS RESPONSE
+    ========================== */
+
+    const response = NextResponse.json({
+      success: true,
+      message: "Login successful",
+      user: {
+        id: user._id.toString(),
+        full_name: user.full_name,
+        email: user.email,
+        role: user.role || "user",
+      },
     });
 
-    if (error) {
-      return Response.json({ error: error.message }, { status: 400 });
-    }
+    /* =========================
+       SET USER COOKIE
+    ========================== */
 
-    return Response.json({ message: "Login successful", user: data.user });
+    response.cookies.set("userId", user._id.toString(), {
+      httpOnly: false, // frontend can read it
+      secure: false,   // set true in production
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    });
+
+    return response;
+
   } catch (err) {
-    console.error("Login Error:", err);
-    return Response.json(
-      { error: "Server error: " + err.message },
+    console.error("❌ Login Error:", err);
+
+    return NextResponse.json(
+      { success: false, error: "Server error: " + err.message },
       { status: 500 }
     );
   }

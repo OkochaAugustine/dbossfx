@@ -1,4 +1,5 @@
-import { getSupabaseServer } from "@/lib/supabaseServer";
+import { connectDB } from "@/lib/mongodb";
+import AccountStatement from "@/models/AccountStatement";
 import jwt from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
@@ -24,11 +25,11 @@ export async function POST(req) {
 
     const { id, balance, earned_profit, active_deposit } = body;
 
-    // 2️⃣ Create supabase server client
-    const supabase = getSupabaseServer();
-    console.log("✅ Supabase server client created");
+    // 2️⃣ Connect MongoDB
+    await connectDB();
+    console.log("✅ MongoDB connected");
 
-    // 3️⃣ Get token
+    // 3️⃣ Get admin token
     const token = cookies().get("admin_token")?.value;
     console.log("Token exists:", !!token);
 
@@ -63,17 +64,13 @@ export async function POST(req) {
     // 5️⃣ Fetch current account
     console.log("📡 Fetching account ID:", id);
 
-    const { data: currentData, error: fetchError } = await supabase
-      .from("account_statements")
-      .select("*")
-      .eq("id", id)
-      .single();
+    const currentData = await AccountStatement.findById(id);
 
-    if (fetchError || !currentData) {
-      console.error("❌ Account fetch failed:", fetchError);
+    if (!currentData) {
+      console.error("❌ Account not found");
       return NextResponse.json(
-        { success: false, error: fetchError?.message || "Account not found" },
-        { status: 400 }
+        { success: false, error: "Account not found" },
+        { status: 404 }
       );
     }
 
@@ -84,32 +81,24 @@ export async function POST(req) {
       balance: balance ?? currentData.balance,
       earned_profit: earned_profit ?? currentData.earned_profit,
       active_deposit: active_deposit ?? currentData.active_deposit,
-      updated_at: new Date().toISOString(),
+      updated_at: new Date(),
     };
 
     console.log("📡 Updating with:", updatedData);
 
-    const { data, error } = await supabase
-      .from("account_statements")
-      .update(updatedData)
-      .eq("id", id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error("❌ Update failed:", error);
-      return NextResponse.json(
-        { success: false, error: error.message },
-        { status: 400 }
-      );
-    }
+    const updatedAccount = await AccountStatement.findByIdAndUpdate(
+      id,
+      updatedData,
+      { new: true }
+    );
 
     console.log("✅ Account updated successfully");
 
     return NextResponse.json(
-      { success: true, account: data },
+      { success: true, account: updatedAccount },
       { status: 200 }
     );
+
   } catch (err) {
     console.error("🚨 FINAL SERVER CRASH:", err);
 

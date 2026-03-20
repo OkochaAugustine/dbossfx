@@ -17,7 +17,6 @@ import {
 } from "@chakra-ui/react";
 import { SunIcon, MoonIcon } from "@chakra-ui/icons";
 import { useColorMode } from "@chakra-ui/react";
-import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
 
 export default function Settings() {
@@ -29,69 +28,106 @@ export default function Settings() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(true);
 
+  /* =====================
+     FETCH CURRENT USER
+  ====================== */
+
   useEffect(() => {
     const fetchUser = async () => {
-      const {
-        data: { user: currentUser },
-        error,
-      } = await supabase.auth.getUser();
+      try {
+        const res = await fetch("/api/auth/me");
+        const data = await res.json();
 
-      if (error) {
+        if (!data.success) {
+          router.replace("/login");
+          return;
+        }
+
+        setUser(data.user);
+        setName(data.user.full_name || "");
+      } catch (err) {
         toast({
           title: "Error fetching user",
-          description: error.message,
+          description: err.message,
           status: "error",
         });
+      } finally {
         setLoading(false);
-        return;
       }
-
-      if (currentUser) {
-        setUser(currentUser);
-        setName(currentUser.user_metadata?.full_name || "");
-      }
-      setLoading(false);
     };
 
     fetchUser();
   }, []);
 
-  const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      toast({
-        title: "Logout failed",
-        description: error.message,
-        status: "error",
-      });
-      return;
-    }
-    router.replace("/login");
-  };
+  /* =====================
+     UPDATE NAME
+  ====================== */
 
   const handleUpdateName = async () => {
     if (!name.trim()) {
-      toast({ title: "Name cannot be empty", status: "warning" });
+      toast({
+        title: "Name cannot be empty",
+        status: "warning",
+      });
       return;
     }
 
-    const { error } = await supabase.auth.updateUser({
-      data: { full_name: name },
-    });
+    try {
+      const res = await fetch("/api/auth/update-name", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ full_name: name }),
+      });
 
-    if (error) {
-      toast({ title: "Update failed", description: error.message, status: "error" });
-      return;
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(data.error);
+      }
+
+      toast({
+        title: "Name updated",
+        description: "Your display name has been updated.",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+      });
+
+      setUser((prev) => ({ ...prev, full_name: name }));
+    } catch (err) {
+      toast({
+        title: "Update failed",
+        description: err.message,
+        status: "error",
+      });
     }
-
-    toast({
-      title: "Name updated",
-      description: "Your display name has been updated.",
-      status: "success",
-      duration: 2000,
-      isClosable: true,
-    });
   };
+
+  /* =====================
+     LOGOUT
+  ====================== */
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      router.replace("/login");
+    } catch (err) {
+      toast({
+        title: "Logout failed",
+        description: err.message,
+        status: "error",
+      });
+    }
+  };
+
+  /* =====================
+     LOADING
+  ====================== */
 
   if (loading) {
     return (
@@ -108,20 +144,25 @@ export default function Settings() {
       </Heading>
 
       <VStack spacing={5} align="stretch">
-        {/* ===== THEME TOGGLER ===== */}
+
+        {/* THEME */}
         <Box>
           <FormControl display="flex" alignItems="center" justifyContent="space-between">
             <FormLabel mb="0">Theme</FormLabel>
+
             <HStack spacing={2}>
               <SunIcon color={colorMode === "light" ? "yellow.400" : "gray.400"} />
+
               <Switch
                 isChecked={colorMode === "dark"}
                 onChange={toggleColorMode}
                 colorScheme="yellow"
               />
+
               <MoonIcon color={colorMode === "dark" ? "yellow.400" : "gray.400"} />
             </HStack>
           </FormControl>
+
           <Text fontSize="sm" color="gray.500" mt={1}>
             Toggle between Light and Dark mode
           </Text>
@@ -129,20 +170,23 @@ export default function Settings() {
 
         <Divider />
 
-        {/* ===== USER INFO ===== */}
+        {/* ACCOUNT INFO */}
         <Box>
           <Heading size="sm" mb={2}>
             Account Info
           </Heading>
+
           <Text fontSize="sm" color="gray.600">
             Email: {user?.email}
           </Text>
+
           <Input
             mt={2}
             placeholder="Full Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
+
           <Button mt={2} colorScheme="blue" onClick={handleUpdateName}>
             Update Name
           </Button>
@@ -150,7 +194,7 @@ export default function Settings() {
 
         <Divider />
 
-        {/* ===== ACCOUNT ACTIONS ===== */}
+        {/* ACCOUNT ACTIONS */}
         <Box>
           <Heading size="sm" mb={2}>
             Account Preferences
@@ -160,6 +204,7 @@ export default function Settings() {
             Logout
           </Button>
         </Box>
+
       </VStack>
     </Box>
   );

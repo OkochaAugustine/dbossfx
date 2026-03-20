@@ -1,18 +1,30 @@
-import jwt from "jsonwebtoken";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 
-export async function GET() {
+export async function GET(req) {
   try {
-    const token = cookies().get("admin_token")?.value;
+
+    const token = req.cookies.get("admin_token")?.value;
 
     if (!token) {
-      return NextResponse.json({ valid: false }, { status: 401 });
+      return NextResponse.json({ valid: false });
     }
 
-    const decoded = jwt.verify(token, process.env.ADMIN_JWT_SECRET);
-    return NextResponse.json({ valid: true, admin: decoded });
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || "supersecretkey"
+    );
+
+    return NextResponse.json({
+      valid: true,
+      admin: decoded,
+    });
+
   } catch (err) {
-    return NextResponse.json({ valid: false }, { status: 401 });
+
+    console.error("JWT verify failed:", err);
+
+    return NextResponse.json({ valid: false });
+
   }
 }

@@ -20,49 +20,69 @@ import {
   Text,
   useToast,
 } from "@chakra-ui/react";
-import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation";
 
 export default function AdminDashboard() {
   const toast = useToast();
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false); // ✅ NEW
   const [accounts, setAccounts] = useState([]);
   const [savingId, setSavingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [replyInputs, setReplyInputs] = useState({});
 
-  // ------------------- AUTH FETCH -------------------
+  // ------------------- FETCH HELPER -------------------
   const authFetch = async (url, options = {}) => {
     return fetch(url, {
       ...options,
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     });
   };
 
-  // ------------------- VERIFY ADMIN -------------------
-  const verifyToken = async () => {
+  // ✅ ADMIN AUTH CHECK
+  const checkAdmin = async () => {
     try {
-      const res = await authFetch("/api/admin/verify-token");
-      const data = await res.json();
-      if (!res.ok || !data.valid) throw new Error("Auth failed");
-
-      await fetchAccounts();
-    } catch (err) {
-      toast({
-        title: "Authentication error",
-        description: "Please login again.",
-        status: "error",
+      const res = await fetch("/api/admin/me", {
+        credentials: "include",
       });
-      window.location.href = "/admin/login";
-    } finally {
-      setLoading(false);
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        router.replace("/admin/login");
+        return false;
+      }
+
+      setIsAdmin(true);
+      return true;
+    } catch (err) {
+      router.replace("/admin/login");
+      return false;
     }
   };
 
+  // ------------------- INITIAL LOAD -------------------
   useEffect(() => {
-    verifyToken();
+    const loadDashboard = async () => {
+      try {
+        const ok = await checkAdmin(); // ✅ PROTECT
+
+        if (!ok) return;
+
+        await fetchAccounts();
+        await fetchMessages();
+      } catch (err) {
+        console.error("Dashboard load error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboard();
   }, []);
 
   // ------------------- FETCH ACCOUNTS -------------------
@@ -70,8 +90,8 @@ export default function AdminDashboard() {
     try {
       const res = await authFetch("/api/admin/getAccounts");
       const result = await res.json();
-      if (!res.ok || !result.success)
-        throw new Error(result.error || "Failed to fetch accounts");
+
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to fetch accounts");
 
       setAccounts(
         result.data.map((acc) => ({
@@ -86,94 +106,29 @@ export default function AdminDashboard() {
         }))
       );
     } catch (err) {
-      toast({
-        title: "Error fetching accounts",
-        description: err.message,
-        status: "error",
-      });
+      toast({ title: "Error fetching accounts", description: err.message, status: "error" });
     }
   };
-
-  // ------------------- RELIABLE LIVE UPDATES -------------------
-  useEffect(() => {
-    // Always fetch once on mount
-    fetchAccounts();
-
-    // Listener for new users
-    const userChannel = supabase
-      .channel("admin-users-realtime")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "users" },
-        async () => {
-          console.log("🆕 New user registered → refetching accounts");
-          await fetchAccounts();
-        }
-      )
-      .subscribe();
-
-    // Listener for new account statements
-    const accountChannel = supabase
-      .channel("admin-account-updates")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "account_statements" },
-        async () => {
-          console.log("💰 New account statement → refetching accounts");
-          await fetchAccounts();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(userChannel);
-      supabase.removeChannel(accountChannel);
-    };
-  }, []);
 
   // ------------------- SAVE ACCOUNT -------------------
   const handleSave = async (account) => {
     setSavingId(account.user_id);
     try {
       const isNew = !account.account_id;
-      const url = isNew
-        ? "/api/admin/createAccount"
-        : "/api/admin/updateAccount";
-
+      const url = isNew ? "/api/admin/createAccount" : "/api/admin/updateAccount";
       const bodyData = isNew
-        ? {
-            user_id: account.user_id,
-            balance: Number(account.balance),
-            earned_profit: Number(account.earned_profit),
-            active_deposit: Number(account.active_deposit),
-          }
-        : {
-            id: account.account_id,
-            balance: Number(account.balance),
-            earned_profit: Number(account.earned_profit),
-            active_deposit: Number(account.active_deposit),
-          };
+        ? { user_id: account.user_id, balance: Number(account.balance), earned_profit: Number(account.earned_profit), active_deposit: Number(account.active_deposit) }
+        : { id: account.account_id, balance: Number(account.balance), earned_profit: Number(account.earned_profit), active_deposit: Number(account.active_deposit) };
 
-      const res = await authFetch(url, {
-        method: "POST",
-        body: JSON.stringify(bodyData),
-      });
+      const res = await authFetch(url, { method: "POST", body: JSON.stringify(bodyData) });
       const result = await res.json();
-      if (!res.ok || !result.success)
-        throw new Error(result.error || "Failed to save account");
 
-      toast({
-        title: `Account ${isNew ? "created" : "updated"}`,
-        status: "success",
-      });
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to save account");
 
+      toast({ title: `Account ${isNew ? "created" : "updated"}`, status: "success" });
       await fetchAccounts();
     } catch (err) {
-      toast({
-        title: "Error",
-        description: err.message,
-        status: "error",
-      });
+      toast({ title: "Error", description: err.message, status: "error" });
     } finally {
       setSavingId(null);
     }
@@ -181,88 +136,63 @@ export default function AdminDashboard() {
 
   // ------------------- DELETE USER -------------------
   const handleDeleteUser = async (userId) => {
-    if (!confirm("Are you sure you want to permanently delete this user?"))
-      return;
-
+    if (!confirm("Are you sure you want to permanently delete this user?")) return;
     setDeletingId(userId);
     try {
-      const res = await authFetch("/api/admin/deleteUser", {
-        method: "POST",
-        body: JSON.stringify({ user_id: userId }),
-      });
+      const res = await authFetch("/api/admin/deleteUser", { method: "POST", body: JSON.stringify({ user_id: userId }) });
       const result = await res.json();
-      if (!res.ok || !result.success)
-        throw new Error(result.error || "Failed to delete user");
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to delete user");
 
-      toast({
-        title: "User deleted successfully",
-        status: "success",
-      });
-
+      toast({ title: "User deleted successfully", status: "success" });
       await fetchAccounts();
     } catch (err) {
-      toast({
-        title: "Delete failed",
-        description: err.message,
-        status: "error",
-      });
+      toast({ title: "Delete failed", description: err.message, status: "error" });
     } finally {
       setDeletingId(null);
     }
   };
 
-  // ------------------- SUPPORT CHAT -------------------
-  useEffect(() => {
-    let mounted = true;
+  // ------------------- SUPPORT MESSAGES -------------------
+  const fetchMessages = async () => {
+    try {
+      const res = await authFetch("/api/mongo/support?admin=true");
+      const result = await res.json();
 
-    const loadMessages = async () => {
-      const { data, error } = await supabase
-        .from("support_messages")
-        .select("*")
-        .order("created_at", { ascending: true });
-
-      if (!error && mounted) setMessages(data || []);
-    };
-
-    loadMessages();
-
-    const channel = supabase
-      .channel("support-admin")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "support_messages" },
-        (payload) => {
-          if (!mounted) return;
-          if (payload.eventType === "INSERT") {
-            setMessages((prev) => [...prev, payload.new]);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      mounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  const sendReply = async (userId) => {
-    const message = replyInputs[userId]?.trim();
-    if (!message) return;
-
-    const { error } = await supabase.from("support_messages").insert({
-      user_id: userId,
-      sender: "admin",
-      message,
-      created_at: new Date().toISOString(),
-    });
-
-    if (!error) {
-      setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
+      if (res.ok && result.success) {
+        setMessages(result.messages.filter((m) => m.userId));
+      }
+    } catch (err) {
+      console.error("Error loading messages:", err);
     }
   };
 
-  if (loading) {
+  const sendReply = async (userId) => {
+    const message = replyInputs[userId]?.trim();
+    if (!message || !userId) return;
+
+    try {
+      const res = await authFetch("/api/mongo/support", {
+        method: "POST",
+        body: JSON.stringify({
+          userId,
+          sender: "admin",
+          message,
+        }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) throw new Error(result.error || "Failed to send message");
+
+      setReplyInputs((prev) => ({ ...prev, [userId]: "" }));
+      await fetchMessages();
+    } catch (err) {
+      toast({ title: "Failed to send message", description: err.message, status: "error" });
+    }
+  };
+
+  // ------------------- LOADING -------------------
+  if (loading || !isAdmin) {
     return (
       <Center minH="100vh">
         <Spinner size="xl" color="yellow.400" />
@@ -270,16 +200,20 @@ export default function AdminDashboard() {
     );
   }
 
+  // ------------------- GROUP MESSAGES -------------------
   const groupedMessages = messages.reduce((acc, msg) => {
-    acc[msg.user_id] = acc[msg.user_id] || [];
-    acc[msg.user_id].push(msg);
+    const id = msg.userId;
+    acc[id] = acc[id] || [];
+    acc[id].push(msg);
     return acc;
   }, {});
 
+  // ------------------- RENDER -------------------
   return (
     <Box p={[4, 6, 8]} maxW="100vw">
       <Heading mb={6}>Admin Dashboard</Heading>
 
+      {/* ACCOUNTS TABLE */}
       <Box overflowX="auto" mb={10}>
         <Table size="sm" minW="1000px">
           <Thead>
@@ -308,9 +242,7 @@ export default function AdminDashboard() {
                     onChange={(e) =>
                       setAccounts((prev) =>
                         prev.map((a) =>
-                          a.user_id === acc.user_id
-                            ? { ...a, balance: e.target.value }
-                            : a
+                          a.user_id === acc.user_id ? { ...a, balance: e.target.value } : a
                         )
                       )
                     }
@@ -325,9 +257,7 @@ export default function AdminDashboard() {
                     onChange={(e) =>
                       setAccounts((prev) =>
                         prev.map((a) =>
-                          a.user_id === acc.user_id
-                            ? { ...a, earned_profit: e.target.value }
-                            : a
+                          a.user_id === acc.user_id ? { ...a, earned_profit: e.target.value } : a
                         )
                       )
                     }
@@ -342,9 +272,7 @@ export default function AdminDashboard() {
                     onChange={(e) =>
                       setAccounts((prev) =>
                         prev.map((a) =>
-                          a.user_id === acc.user_id
-                            ? { ...a, active_deposit: e.target.value }
-                            : a
+                          a.user_id === acc.user_id ? { ...a, active_deposit: e.target.value } : a
                         )
                       )
                     }
@@ -380,6 +308,7 @@ export default function AdminDashboard() {
 
       <Divider my={6} />
 
+      {/* SUPPORT */}
       <Heading size="md" mb={4}>
         Live Support Messages
       </Heading>
@@ -393,7 +322,7 @@ export default function AdminDashboard() {
           <VStack align="stretch" spacing={2}>
             {msgs.map((m) => (
               <Box
-                key={m.id}
+                key={m._id || m.id}
                 p={2}
                 bg={m.sender === "user" ? "yellow.100" : "gray.200"}
                 rounded="md"
@@ -415,11 +344,7 @@ export default function AdminDashboard() {
                 setReplyInputs((p) => ({ ...p, [userId]: e.target.value }))
               }
             />
-            <Button
-              size="sm"
-              colorScheme="yellow"
-              onClick={() => sendReply(userId)}
-            >
+            <Button size="sm" colorScheme="yellow" onClick={() => sendReply(userId)}>
               Send
             </Button>
           </HStack>

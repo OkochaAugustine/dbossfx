@@ -12,6 +12,7 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
+import { useRouter } from "next/navigation";
 
 import LiveChart from "./components/LiveChart";
 import AccountStatement from "./components/AccountStatement";
@@ -23,12 +24,13 @@ import WithdrawPage from "./withdraw/page";
 import DepositPage from "./deposit/page";
 import ChatPage from "./chat/page";
 
-import { supabase } from "@/lib/supabaseClient";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useLoading } from "@/components/context/LoadingContext";
 
 export default function DashboardPage() {
   const { loading, type } = useLoading();
+  const router = useRouter();
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [muted, setMuted] = useState(false);
   const [userId, setUserId] = useState(null);
@@ -37,29 +39,37 @@ export default function DashboardPage() {
 
   const links = ["dashboard", "news", "history", "settings", "chat"];
 
-  // Fetch user session
+  // Fetch user from API
   useEffect(() => {
     let isMounted = true;
 
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!isMounted) return;
-      if (user) setUserId(user.id);
-      setLoadingUser(false);
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        const data = await res.json();
+
+        if (!data.success) {
+          router.replace("/login");
+          return;
+        }
+
+        if (isMounted) {
+          setUserId(data.user.id);
+        }
+      } catch (err) {
+        console.error("Error fetching user:", err);
+        router.replace("/login");
+      } finally {
+        if (isMounted) setLoadingUser(false);
+      }
     };
 
     getUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!isMounted) return;
-      setUserId(session?.user?.id || null);
-    });
-
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   return (
     <Flex
@@ -68,7 +78,7 @@ export default function DashboardPage() {
       overflow="hidden"
       direction={{ base: "column", md: "row" }}
     >
-      {/* ================= DESKTOP SIDEBAR ================= */}
+      {/* Desktop Sidebar */}
       <VStack
         display={{ base: "none", md: "flex" }}
         w="250px"
@@ -80,11 +90,7 @@ export default function DashboardPage() {
         spacing={4}
         align="stretch"
       >
-        {!loadingUser && userId && (
-          <Box>
-            <AccountStatement userId={userId} isCompact />
-          </Box>
-        )}
+        {!loadingUser && userId && <AccountStatement userId={userId} isCompact />}
 
         {links.map((p) => (
           <Button
@@ -101,11 +107,7 @@ export default function DashboardPage() {
         <Divider borderColor="whiteAlpha.500" />
 
         <HStack spacing={2}>
-          <Button
-            colorScheme="yellow"
-            flex="1"
-            onClick={() => setActiveView("deposit")}
-          >
+          <Button colorScheme="yellow" flex="1" onClick={() => setActiveView("deposit")}>
             Deposit
           </Button>
           <Button
@@ -125,7 +127,7 @@ export default function DashboardPage() {
         />
       </VStack>
 
-      {/* ================= MOBILE HEADER ================= */}
+      {/* Mobile Header */}
       <Flex
         display={{ base: "flex", md: "none" }}
         p={2}
@@ -146,7 +148,7 @@ export default function DashboardPage() {
         )}
       </Flex>
 
-      {/* ================= MOBILE SIDEBAR ================= */}
+      {/* Mobile Sidebar */}
       {mobileOpen && (
         <VStack
           display={{ base: "flex", md: "none" }}
@@ -198,13 +200,19 @@ export default function DashboardPage() {
         </VStack>
       )}
 
-      {/* ================= MAIN CONTENT ================= */}
+      {/* Main Content */}
       <Flex flex="1" direction="column" overflow="hidden">
         {loading && type === "dashboard" && <LoadingScreen type="dashboard" />}
 
         <Box flex="1" p={{ base: 2, md: 6 }} overflow="auto">
-          {!loadingUser && userId ? (
+          {loadingUser ? (
+            <Flex h="60vh" align="center" justify="center">
+              <Text>Checking authentication...</Text>
+            </Flex>
+          ) : userId ? (
             <>
+              {/* ✅ Removed the "Please verify your email" warning */}
+
               {activeView === "dashboard" && (
                 <>
                   <HStack mb={3} wrap="wrap" gap={2}>
@@ -215,10 +223,7 @@ export default function DashboardPage() {
                     >
                       Start Trading
                     </Button>
-                    <Button
-                      colorScheme="blue"
-                      flex={{ base: "1 1 100%", md: "1" }}
-                    >
+                    <Button colorScheme="blue" flex={{ base: "1 1 100%", md: "1" }}>
                       Create Demo Account
                     </Button>
                   </HStack>

@@ -14,11 +14,13 @@ import {
 } from "@chakra-ui/react";
 import { HamburgerIcon, CloseIcon } from "@chakra-ui/icons";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLoading } from "@/components/context/LoadingContext";
 
-/* FALLBACK ASSETS & NEWS */
+// ✅ IMPORT YOUR TRANSLATOR COMPONENT
+import GoogleTranslate from "@/components/GoogleTranslate";
+
 const FALLBACK_ASSETS = [
   { symbol: "EURUSD", price: "1.0842", up: true },
   { symbol: "GBPUSD", price: "1.2631", up: false },
@@ -44,15 +46,13 @@ export default function Navbar() {
   const router = useRouter();
   const { setLoading, setType } = useLoading();
 
-  const [assets, setAssets] = useState(FALLBACK_ASSETS);
-  const [news, setNews] = useState(FALLBACK_NEWS);
+  const [assets] = useState(FALLBACK_ASSETS);
+  const [news] = useState(FALLBACK_NEWS);
 
   const go = (path) => {
     setType("public");
     setLoading(true);
-    setTimeout(() => {
-      router.replace(path);
-    }, 50);
+    setTimeout(() => router.replace(path), 50);
   };
 
   const NavLink = ({ href, children }) => (
@@ -72,32 +72,6 @@ export default function Navbar() {
     </ChakraLink>
   );
 
-  // Initialize Google Translate after mount
-  useEffect(() => {
-    const addGoogleTranslate = () => {
-      if (window.google && window.google.translate) {
-        new window.google.translate.TranslateElement(
-          {
-            pageLanguage: "en",
-            includedLanguages: "en,fr,de,es,it,pt,ar,zh-CN,ru",
-            layout: window.google.translate.TranslateElement.InlineLayout.SIMPLE,
-          },
-          "google_translate_element"
-        );
-      }
-    };
-
-    // Retry a few times in case Google script hasn't loaded yet
-    const interval = setInterval(() => {
-      if (document.getElementById("google_translate_element") && window.google) {
-        addGoogleTranslate();
-        clearInterval(interval);
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <Box position="sticky" top="0" zIndex="1000">
       <Box bg="gray.900" boxShadow="md">
@@ -109,99 +83,115 @@ export default function Navbar() {
           align="center"
           justify="space-between"
         >
+          {/* Logo */}
           <Box cursor="pointer" onClick={() => go("/")}>
             <Image src="/images/logo.png" alt="Logo" width={100} height={40} />
           </Box>
 
-          {/* Desktop Links */}
-          <HStack spacing={4} display={{ base: "none", md: "flex" }} align="center">
-            <NavLink href="/">Home</NavLink>
-            <NavLink href="/markets">Markets</NavLink>
-            <NavLink href="/platforms">Platforms</NavLink>
-            <NavLink href="/about">About</NavLink>
-            <NavLink href="/contact">Contact</NavLink>
+          {/* Right Section */}
+          <Flex align="center" gap={3}>
+            
+            {/* ✅ CLEAN GOOGLE TRANSLATOR */}
+            <Box
+              sx={{
+                transform: "scale(0.8)",
+                transformOrigin: "right center",
+                maxWidth: "120px",
+              }}
+            >
+              <GoogleTranslate />
+            </Box>
 
-            {/* Google Translate Dropdown */}
-            <Box id="google_translate_element" h="40px" />
+            {/* Desktop Links */}
+            <HStack spacing={4} display={{ base: "none", md: "flex" }}>
+              <NavLink href="/">Home</NavLink>
+              <NavLink href="/markets">Markets</NavLink>
+              <NavLink href="/platforms">Platforms</NavLink>
+              <NavLink href="/about">About</NavLink>
+              <NavLink href="/contact">Contact</NavLink>
 
-            {/* Login Button */}
-            <Button colorScheme="yellow" onClick={() => go("/login")} size="sm">
-              Login
-            </Button>
-          </HStack>
+              <Button
+                colorScheme="yellow"
+                onClick={() => go("/login")}
+                size="sm"
+              >
+                Login
+              </Button>
+            </HStack>
 
-          {/* Mobile menu toggle */}
-          <IconButton
-            icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
-            display={{ md: "none" }}
-            onClick={onToggle}
-            bg="transparent"
-            color="white"
-            aria-label="Toggle Menu"
-          />
+            {/* Mobile Toggle */}
+            <IconButton
+              icon={isOpen ? <CloseIcon /> : <HamburgerIcon />}
+              display={{ md: "none" }}
+              onClick={onToggle}
+              bg="transparent"
+              color="white"
+              aria-label="Toggle Menu"
+            />
+          </Flex>
         </Flex>
+
+        {/* Mobile menu */}
+        <Collapse in={isOpen} animateOpacity>
+          <Box bg="gray.900" pb={4} display={{ md: "none" }}>
+            <Stack px={4} spacing={3}>
+              <NavLink href="/">Home</NavLink>
+              <NavLink href="/markets">Markets</NavLink>
+              <NavLink href="/platforms">Platforms</NavLink>
+              <NavLink href="/about">About</NavLink>
+              <NavLink href="/contact">Contact</NavLink>
+
+              <Button
+                colorScheme="yellow"
+                onClick={() => {
+                  onClose();
+                  go("/login");
+                }}
+                w="full"
+              >
+                Login
+              </Button>
+            </Stack>
+          </Box>
+        </Collapse>
 
         {/* Assets ticker */}
         <Box bg="gray.900" overflow="hidden" py={2}>
-          <Flex w="max-content" animation={`ticker ${Math.max(20, assets.length * 2)}s linear infinite`}>
-            <Flex gap={10} whiteSpace="nowrap">
-              {assets.map((a, i) => (
-                <Text key={`a-${i}`} fontSize="sm" fontWeight="bold" color={a.up ? "green.300" : "red.300"}>
-                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
-                </Text>
-              ))}
-            </Flex>
-            <Flex gap={10} whiteSpace="nowrap">
-              {assets.map((a, i) => (
-                <Text key={`b-${i}`} fontSize="sm" fontWeight="bold" color={a.up ? "green.300" : "red.300"}>
-                  {a.symbol} {a.price} {a.up ? "▲" : "▼"}
-                </Text>
-              ))}
-            </Flex>
+          <Flex w="max-content" animation="ticker 25s linear infinite">
+            {[...assets, ...assets].map((a, i) => (
+              <Text
+                key={i}
+                mx={5}
+                fontSize="sm"
+                fontWeight="bold"
+                color={a.up ? "green.300" : "red.300"}
+              >
+                {a.symbol} {a.price} {a.up ? "▲" : "▼"}
+              </Text>
+            ))}
           </Flex>
         </Box>
 
         {/* News ticker */}
         <Box bg="gray.800" overflow="hidden" py={2}>
-          <Flex w="max-content" animation={`ticker ${Math.max(20, news.length * 2)}s linear infinite`}>
-            <Flex gap={10} whiteSpace="nowrap">
-              {news.map((n, i) => (
-                <Text key={`n-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
-                  📰 {n}
-                </Text>
-              ))}
-            </Flex>
-            <Flex gap={10} whiteSpace="nowrap">
-              {news.map((n, i) => (
-                <Text key={`m-${i}`} fontSize="sm" color="yellow.300" fontWeight="medium">
-                  📰 {n}
-                </Text>
-              ))}
-            </Flex>
+          <Flex w="max-content" animation="ticker 30s linear infinite">
+            {[...news, ...news].map((n, i) => (
+              <Text key={i} mx={5} fontSize="sm" color="yellow.300">
+                📰 {n}
+              </Text>
+            ))}
           </Flex>
         </Box>
       </Box>
 
-      {/* Mobile menu */}
-      <Collapse in={isOpen} animateOpacity>
-        <Box bg="gray.900" pb={4} display={{ md: "none" }}>
-          <Stack px={4} spacing={3}>
-            <NavLink href="/">Home</NavLink>
-            <NavLink href="/markets">Markets</NavLink>
-            <NavLink href="/platforms">Platforms</NavLink>
-            <NavLink href="/about">About</NavLink>
-            <NavLink href="/contact">Contact</NavLink>
-            <Button colorScheme="yellow" onClick={() => { onClose(); go("/login"); }} w="full">
-              Login
-            </Button>
-          </Stack>
-        </Box>
-      </Collapse>
-
       <style jsx global>{`
         @keyframes ticker {
-          from { transform: translateX(0); }
-          to { transform: translateX(-50%); }
+          from {
+            transform: translateX(0);
+          }
+          to {
+            transform: translateX(-50%);
+          }
         }
       `}</style>
     </Box>
